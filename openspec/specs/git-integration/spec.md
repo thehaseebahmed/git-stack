@@ -51,32 +51,24 @@ AND starts the stack at index 1 for the new feature name
 ```
 
 ### Requirement: Git command execution
-The application MUST execute git commands reliably and handle errors appropriately.
+The application MUST execute git commands reliably with enhanced context awareness and error handling.
 
-#### Scenario: Successful branch creation
+#### Scenario: Branch creation with context validation
 ```
-GIVEN git is available in system PATH
-WHEN the application executes git commands to create a branch
-THEN the git command succeeds
-AND the new branch exists in the repository
-AND success is reported to the user
-```
-
-#### Scenario: Git command failure
-```
-GIVEN git command fails (e.g., permission error, disk full)
-WHEN the application attempts to create a branch
-THEN the error is captured and reported to the user
-AND the application exits with status code 1
-AND no partial state changes remain
+GIVEN git commands will be executed
+WHEN the application creates a new branch
+THEN it validates the current branch context first
+AND only proceeds with git operations if context is valid
+AND handles context-related errors before git execution
 ```
 
-#### Scenario: Git CLI not available
+#### Scenario: Enhanced error reporting for context failures
 ```
-GIVEN git is not installed or not in PATH
-WHEN the application attempts to execute git commands
-THEN it displays an error message indicating git is not available
-AND exits with status code 1
+GIVEN a branch creation fails due to context issues
+WHEN the error is reported to user
+THEN the error message includes current branch information
+AND explains the specific context constraint violated
+AND suggests concrete next steps for resolution
 ```
 
 ### Requirement: Branch name validation
@@ -97,5 +89,54 @@ WHEN the application processes the feature name
 THEN it validates the name against git branch naming rules
 AND rejects names that would create invalid branches
 AND provides helpful error messages about naming requirements
+```
+
+### Requirement: Current branch analysis
+The application MUST analyze the current branch to determine stack context and appropriate branch creation behavior.
+
+#### Scenario: Parse stack branch information
+```
+GIVEN the current branch name follows pattern "feature-name/index"
+WHEN the application analyzes the branch
+THEN it extracts the feature name portion
+AND determines the current index number
+AND calculates the next available index
+```
+
+#### Scenario: Identify base branches for new stacks
+```
+GIVEN the current branch is the repository's default branch
+WHEN the application analyzes the branch
+THEN it identifies the branch as suitable for starting new stacks
+AND requires explicit feature name for branch creation
+```
+
+#### Scenario: Handle edge cases in branch name parsing
+```
+GIVEN branch names with multiple slashes or complex patterns
+WHEN the application attempts to parse stack information
+THEN it handles parsing errors gracefully
+AND defaults to treating branch as base branch
+```
+
+### Requirement: Context-aware branch creation
+The application MUST adapt branch creation behavior based on current branch context.
+
+#### Scenario: Prevent branch creation in invalid contexts
+```
+GIVEN the user is on stack branch "feature-auth/2"
+WHEN they attempt to create a new stack with different feature name
+THEN the branch creation is blocked before git commands
+AND appropriate error message is displayed
+AND no git operations are performed
+```
+
+#### Scenario: Create continuation branches efficiently
+```
+GIVEN the user is on stack branch with known context
+WHEN creating a continuation branch
+THEN the feature name is inferred from current branch
+AND the next index is calculated automatically
+AND git branch creation proceeds with generated name
 ```
 

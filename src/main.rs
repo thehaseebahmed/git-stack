@@ -15,10 +15,10 @@ struct Cli {
 /// Available subcommands for git-stack
 #[derive(Subcommand)]
 enum Commands {
-    /// Create a new branch in the current stack
+    /// Create a new branch in the current stack or continue an existing stack
     New {
-        /// The name of the feature for the new branch
-        feature_name: String,
+        /// The name of the feature for the new branch (optional - if not provided, continues current stack)
+        feature_name: Option<String>,
     },
 }
 
@@ -35,7 +35,8 @@ fn main() {
                 }
             }
 
-            match commands::new_branch(&git_runner, feature_name) {
+            let feature_name_ref = feature_name.as_deref();
+            match commands::new_branch_contextual(&git_runner, feature_name_ref) {
                 Ok(branch_name) => {
                     println!("Created new branch: {}", branch_name);
                     Ok(())

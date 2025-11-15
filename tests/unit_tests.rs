@@ -1,4 +1,6 @@
-use git_stack::branch::{get_next_index_from_branches, validate_feature_name};
+use git_stack::branch::{
+    get_next_index_from_branches, parse_stack_branch, validate_feature_name,
+};
 use git_stack::{GitRunner, GitStackError, MockGitRunner};
 
 #[test]
@@ -101,4 +103,50 @@ fn test_mock_git_runner_not_in_repo() {
     let mock = MockGitRunner::new().not_in_repo();
 
     assert!(!mock.is_repository().unwrap());
+}
+
+// Tests for new context detection functionality
+#[test]
+fn test_parse_stack_branch_valid() {
+    let stack_info = parse_stack_branch("feature-auth/1").unwrap();
+    assert_eq!(stack_info.feature_name, "feature-auth");
+    assert_eq!(stack_info.index, 1);
+
+    let stack_info = parse_stack_branch("ui-redesign/42").unwrap();
+    assert_eq!(stack_info.feature_name, "ui-redesign");
+    assert_eq!(stack_info.index, 42);
+
+    let stack_info = parse_stack_branch("feature_name/3").unwrap();
+    assert_eq!(stack_info.feature_name, "feature_name");
+    assert_eq!(stack_info.index, 3);
+}
+
+#[test]
+fn test_parse_stack_branch_invalid() {
+    assert!(parse_stack_branch("main").is_none());
+    assert!(parse_stack_branch("feature").is_none());
+    assert!(parse_stack_branch("feature/").is_none());
+    assert!(parse_stack_branch("feature/abc").is_none());
+    assert!(parse_stack_branch("feature/0").is_none()); // Index must be positive
+    assert!(parse_stack_branch("feature name/1").is_none()); // Invalid feature name
+    assert!(parse_stack_branch("").is_none());
+    assert!(parse_stack_branch("/1").is_none());
+}
+
+#[test]
+fn test_context_aware_error_messages() {
+    let err = GitStackError::FeatureNameRequiredOnBaseBranch("main".to_string());
+    assert!(err
+        .to_string()
+        .contains("Feature name is required when creating a new stack from base branch 'main'"));
+    assert!(err.to_string().contains("git-stack new <feature-name>"));
+
+    let err = GitStackError::CannotStartNewStackFromDiff {
+        current_branch: "feature-auth/2".to_string(),
+        attempted_feature: "ui-redesign".to_string(),
+    };
+    assert!(err.to_string().contains(
+        "Cannot start new stack 'ui-redesign' from existing stack branch 'feature-auth/2'"
+    ));
+    assert!(err.to_string().contains("git checkout main"));
 }

@@ -3,9 +3,11 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
 
 ## Features
 
-- **Stack Branch Creation**: Create new branches that follow a structured naming pattern (`feature-name/1`, `feature-name/2`, etc.)
+- **Context-Aware Branch Creation**: Intelligently creates branches based on your current context
+  - **From base branches**: Creates new stacks with structured naming (`feature-name/1`, `feature-name/2`, etc.)
+  - **From stack branches**: Continues existing stacks or prevents accidental new stack creation
 - **Git Integration**: Seamlessly integrates with your existing git workflow
-- **Error Handling**: Clear error messages and proper exit codes
+- **Error Handling**: Clear, actionable error messages and proper exit codes
 
 ## Building from Source
 
@@ -44,6 +46,9 @@ cargo fmt
 
 ### Creating New Branches
 
+The behavior of `git-stack new` depends on your current branch context:
+
+#### From base branches (main, master, etc.)
 Create a new stacked branch for a feature:
 ```bash
 git-stack new <feature-name>
@@ -59,6 +64,34 @@ git-stack new auth
 
 # Creates branch "ui-redesign/1"
 git-stack new ui-redesign
+```
+
+#### From existing stack branches
+Continue the current stack without specifying a feature name:
+```bash
+git-stack new
+# or
+git-stack new .
+```
+
+Examples:
+```bash
+# On branch "feature-auth/2"
+git-stack new
+# Creates "feature-auth/3"
+
+# On branch "ui-redesign/1" 
+git-stack new .
+# Creates "ui-redesign/2"
+```
+
+#### Error Prevention
+Attempting to start a new stack from an existing stack branch will show a helpful error:
+```bash
+# On branch "feature-auth/2"
+git-stack new different-feature
+# Error: Cannot start new stack 'different-feature' from existing stack branch 'feature-auth/2'. 
+# To start a new stack, first return to a base branch (like 'main') with: git checkout main
 ```
 
 ### Help and Version

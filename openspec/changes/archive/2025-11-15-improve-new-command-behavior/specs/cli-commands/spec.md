@@ -1,8 +1,7 @@
-# cli-commands Specification
+# cli-commands Specification Delta
 
-## Purpose
-TBD - created by archiving change implement-new-branch-command. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Command-line argument parsing
 The application MUST parse command-line arguments to identify and execute commands, with context-aware behavior for the new command.
 
@@ -69,17 +68,7 @@ THEN the validation fails with context-aware error
 AND provides guidance to return to base branch
 ```
 
-### Requirement: Help and usage information
-The application MUST provide clear usage information and help text.
-
-#### Scenario: User requests help
-```
-GIVEN the user executes `git-stack --help` or `git-stack -h`
-WHEN the application processes the request
-THEN it displays comprehensive usage information
-AND lists all available commands with descriptions
-AND exits with status code 0
-```
+## ADDED Requirements
 
 ### Requirement: Branch context detection
 The application MUST detect and parse the current branch to understand stack context.
@@ -126,4 +115,3 @@ WHEN the validation fails
 THEN the error message explains feature name requirement
 AND shows example usage patterns
 ```
-
