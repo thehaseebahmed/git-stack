@@ -4,6 +4,7 @@
 //! following the same pattern as the GitRunner trait.
 
 use crate::{GitStackError, Result};
+use serde_json;
 use std::process::Command;
 
 /// Trait for executing GitHub CLI commands - allows for dependency injection
@@ -127,30 +128,31 @@ impl GitHubRunner for RealGitHubRunner {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-
+        
         // Parse JSON output to extract PR number
         if stdout.trim().is_empty() || stdout.trim() == "[]" {
             return Ok(None);
         }
 
-        // Simple JSON parsing - look for "number": value pattern
-        for line in stdout.lines() {
-            if line.contains("\"number\":") {
-                if let Some(number_part) = line.split("\"number\":").nth(1) {
-                    if let Some(number_str) = number_part
-                        .split(',')
-                        .next()
-                        .or_else(|| number_part.split('}').next())
-                    {
-                        if let Ok(pr_num) = number_str.trim().parse::<u32>() {
-                            return Ok(Some(pr_num));
+        // Parse JSON using serde_json
+        match serde_json::from_str::<Vec<serde_json::Value>>(&stdout) {
+            Ok(prs) => {
+                if let Some(pr) = prs.first() {
+                    if let Some(number) = pr.get("number") {
+                        if let Some(pr_num) = number.as_u64() {
+                            return Ok(Some(pr_num as u32));
                         }
                     }
                 }
+                Ok(None)
+            }
+            Err(e) => {
+                Err(GitStackError::GitHubOperationFailed(format!(
+                    "Failed to parse GitHub CLI JSON response: {}",
+                    e
+                )))
             }
         }
-
-        Ok(None)
     }
 }
 

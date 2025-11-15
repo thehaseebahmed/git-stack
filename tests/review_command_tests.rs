@@ -324,12 +324,133 @@ mod pr_analysis_tests {
     #[test]
     fn test_pr_base_branch_targeting() {
         let git_runner = MockGitRunner::new()
-            .with_current_branch("feature-base/1")
-            .with_branches(vec!["main".to_string(), "feature-base/1".to_string()]);
+            .with_current_branch("feature-base/2")
+            .with_branches(vec![
+                "main".to_string(),
+                "feature-base/1".to_string(),
+                "feature-base/2".to_string(),
+            ]);
 
-        struct BaseTestGitHubRunner;
+        struct BaseTestGitHubRunner {
+            call_count: std::cell::RefCell<u32>,
+        }
 
         impl GitHubRunner for BaseTestGitHubRunner {
+            fn check_availability(&self) -> Result<()> {
+                Ok(())
+            }
+
+            fn create_pull_request(
+                &self,
+                branch: &str,
+                _title: &str,
+                _body: &str,
+                base: &str,
+            ) -> Result<u32> {
+                let mut count = self.call_count.borrow_mut();
+                *count += 1;
+
+                // First PR (feature-base/1) should target main
+                // Second PR (feature-base/2) should target feature-base/1
+                match branch {
+                    "feature-base/1" => {
+                        assert_eq!(base, "main", "First branch should target main");
+                        Ok(1)
+                    }
+                    "feature-base/2" => {
+                        assert_eq!(
+                            base, "feature-base/1",
+                            "Second branch should target first branch"
+                        );
+                        Ok(2)
+                    }
+                    _ => panic!("Unexpected branch: {}", branch),
+                }
+            }
+
+            fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
+                Ok(None)
+            }
+        }
+
+        let github_runner = BaseTestGitHubRunner {
+            call_count: std::cell::RefCell::new(0),
+        };
+        let result = commands::review_stack(&git_runner, &github_runner);
+        assert!(result.is_ok());
+        assert_eq!(*github_runner.call_count.borrow(), 2, "Should create 2 PRs");
+    }
+
+    #[test]
+    fn test_pr_base_branch_targeting_with_existing_prs() {
+        // Test that PR base branch targeting works when some PRs already exist
+        let git_runner = MockGitRunner::new()
+            .with_current_branch("feature-existing/3")
+            .with_branches(vec![
+                "main".to_string(),
+                "feature-existing/1".to_string(),
+                "feature-existing/2".to_string(),
+                "feature-existing/3".to_string(),
+            ]);
+
+        struct ExistingPRsGitHubRunner;
+
+        impl GitHubRunner for ExistingPRsGitHubRunner {
+            fn check_availability(&self) -> Result<()> {
+                Ok(())
+            }
+
+            fn create_pull_request(
+                &self,
+                branch: &str,
+                _title: &str,
+                _body: &str,
+                base: &str,
+            ) -> Result<u32> {
+                // Only feature-existing/3 should need a PR created
+                // feature-existing/1 has PR #100, feature-existing/2 has PR #101
+                match branch {
+                    "feature-existing/3" => {
+                        assert_eq!(
+                            base, "feature-existing/2",
+                            "Third branch should target second branch"
+                        );
+                        Ok(102)
+                    }
+                    _ => panic!("Unexpected PR creation for branch: {}", branch),
+                }
+            }
+
+            fn list_pull_requests_for_branch(&self, branch: &str) -> Result<Option<u32>> {
+                // Simulate existing PRs for first two branches
+                match branch {
+                    "feature-existing/1" => Ok(Some(100)),
+                    "feature-existing/2" => Ok(Some(101)),
+                    "feature-existing/3" => Ok(None),
+                    _ => Ok(None),
+                }
+            }
+        }
+
+        let github_runner = ExistingPRsGitHubRunner;
+        let result = commands::review_stack(&git_runner, &github_runner);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_pr_creation_with_branch_pushing() {
+        // Test that branches are pushed before PR creation
+        let git_runner = MockGitRunner::new()
+            .with_current_branch("feature-push/1")
+            .with_branches(vec![
+                "main".to_string(),
+                "feature-push/1".to_string(),
+                "feature-push/2".to_string(),
+            ]);
+
+        struct PushTestGitHubRunner;
+
+        impl GitHubRunner for PushTestGitHubRunner {
             fn check_availability(&self) -> Result<()> {
                 Ok(())
             }
@@ -339,20 +460,231 @@ mod pr_analysis_tests {
                 _branch: &str,
                 _title: &str,
                 _body: &str,
-                base: &str,
+                _base: &str,
             ) -> Result<u32> {
-                // Verify base branch is main (not the previous branch in stack)
-                assert_eq!(base, "main");
                 Ok(1)
             }
 
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
-                Ok(None)
+                Ok(None) // No existing PRs
             }
         }
 
-        let github_runner = BaseTestGitHubRunner;
+        let github_runner = PushTestGitHubRunner;
         let result = commands::review_stack(&git_runner, &github_runner);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_review_push_failure() {
+        // Test error handling when push fails
+        let git_runner = MockGitRunner::new()
+            .with_current_branch("feature-pushfail/1")
+            .with_branches(vec!["main".to_string(), "feature-pushfail/1".to_string()])
+            .should_fail(); // This will make git push fail
+
+        let github_runner = MockGitHubRunner::new();
+
+        let result = commands::review_stack(&git_runner, &github_runner);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            GitStackError::GitCommandFailed(_) => {}
+            _ => panic!("Expected GitCommandFailed error"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod spec_compliance_tests {
+    use super::*;
+
+    #[test]
+    fn test_review_spec_scenario_all_prs_exist() {
+        // Spec scenario: "Handle stack with all PRs already created"
+        let git_runner = MockGitRunner::new()
+            .with_current_branch("feature-complete/2")
+            .with_branches(vec![
+                "main".to_string(),
+                "feature-complete/1".to_string(),
+                "feature-complete/2".to_string(),
+                "feature-complete/3".to_string(),
+            ]);
+
+        let github_runner = MockGitHubRunner::new()
+            .with_existing_pr("feature-complete/1", 100)
+            .with_existing_pr("feature-complete/2", 101)
+            .with_existing_pr("feature-complete/3", 102);
+
+        let result = commands::review_stack(&git_runner, &github_runner);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_review_spec_scenario_partial_stack() {
+        // Spec scenario: "Create PRs for partially-reviewed stack"
+        // GIVEN stack has branches /1, /2, /3 where /1 already has PR #100
+        // THEN it skips /1 and creates PR for /2 with "Depends on #100"
+        // AND creates PR for /3 with dependency on /2's new PR
+        let git_runner = MockGitRunner::new()
+            .with_current_branch("feature-partial/2")
+            .with_branches(vec![
+                "main".to_string(),
+                "feature-partial/1".to_string(),
+                "feature-partial/2".to_string(),
+                "feature-partial/3".to_string(),
+            ]);
+
+        struct PartialStackGitHubRunner {
+            pr_creation_calls: std::cell::RefCell<Vec<(String, String, String, String)>>,
+        }
+
+        impl GitHubRunner for PartialStackGitHubRunner {
+            fn check_availability(&self) -> Result<()> {
+                Ok(())
+            }
+
+            fn create_pull_request(
+                &self,
+                branch: &str,
+                title: &str,
+                body: &str,
+                base: &str,
+            ) -> Result<u32> {
+                let mut calls = self.pr_creation_calls.borrow_mut();
+                calls.push((
+                    branch.to_string(),
+                    title.to_string(),
+                    body.to_string(),
+                    base.to_string(),
+                ));
+
+                match branch {
+                    "feature-partial/2" => {
+                        assert_eq!(
+                            body, "Depends on #100",
+                            "Second PR should depend on first existing PR"
+                        );
+                        assert_eq!(
+                            base, "feature-partial/1",
+                            "Second PR should target first branch"
+                        );
+                        Ok(200)
+                    }
+                    "feature-partial/3" => {
+                        assert_eq!(
+                            body, "Depends on #200",
+                            "Third PR should depend on second new PR"
+                        );
+                        assert_eq!(
+                            base, "feature-partial/2",
+                            "Third PR should target second branch"
+                        );
+                        Ok(201)
+                    }
+                    _ => panic!("Unexpected PR creation for branch: {}", branch),
+                }
+            }
+
+            fn list_pull_requests_for_branch(&self, branch: &str) -> Result<Option<u32>> {
+                match branch {
+                    "feature-partial/1" => Ok(Some(100)), // Existing PR
+                    _ => Ok(None),                        // No PR exists
+                }
+            }
+        }
+
+        let github_runner = PartialStackGitHubRunner {
+            pr_creation_calls: std::cell::RefCell::new(Vec::new()),
+        };
+
+        let result = commands::review_stack(&git_runner, &github_runner);
+        assert!(result.is_ok());
+
+        // Verify that only 2 PRs were created (for branches 2 and 3)
+        let calls = github_runner.pr_creation_calls.borrow();
+        assert_eq!(calls.len(), 2, "Should create exactly 2 PRs");
+    }
+
+    #[test]
+    fn test_review_spec_scenario_no_existing_prs() {
+        // Spec scenario: "Create PRs for stack with no existing PRs"
+        // GIVEN stack has branches /1, /2, /3 with no existing PRs
+        // THEN it creates PRs starting from /1
+        // AND establishes dependencies: /2 depends on /1, /3 depends on /2
+        let git_runner = MockGitRunner::new()
+            .with_current_branch("feature-new/1")
+            .with_branches(vec![
+                "main".to_string(),
+                "feature-new/1".to_string(),
+                "feature-new/2".to_string(),
+                "feature-new/3".to_string(),
+            ]);
+
+        struct NewStackGitHubRunner {
+            pr_creation_calls: std::cell::RefCell<Vec<(String, String, String, String)>>,
+        }
+
+        impl GitHubRunner for NewStackGitHubRunner {
+            fn check_availability(&self) -> Result<()> {
+                Ok(())
+            }
+
+            fn create_pull_request(
+                &self,
+                branch: &str,
+                title: &str,
+                body: &str,
+                base: &str,
+            ) -> Result<u32> {
+                let mut calls = self.pr_creation_calls.borrow_mut();
+                calls.push((
+                    branch.to_string(),
+                    title.to_string(),
+                    body.to_string(),
+                    base.to_string(),
+                ));
+
+                match branch {
+                    "feature-new/1" => {
+                        assert_eq!(body, "", "First PR should have no dependencies");
+                        assert_eq!(base, "main", "First PR should target main");
+                        Ok(301)
+                    }
+                    "feature-new/2" => {
+                        assert_eq!(body, "Depends on #301", "Second PR should depend on first");
+                        assert_eq!(
+                            base, "feature-new/1",
+                            "Second PR should target first branch"
+                        );
+                        Ok(302)
+                    }
+                    "feature-new/3" => {
+                        assert_eq!(body, "Depends on #302", "Third PR should depend on second");
+                        assert_eq!(
+                            base, "feature-new/2",
+                            "Third PR should target second branch"
+                        );
+                        Ok(303)
+                    }
+                    _ => panic!("Unexpected PR creation for branch: {}", branch),
+                }
+            }
+
+            fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
+                Ok(None) // No existing PRs
+            }
+        }
+
+        let github_runner = NewStackGitHubRunner {
+            pr_creation_calls: std::cell::RefCell::new(Vec::new()),
+        };
+
+        let result = commands::review_stack(&git_runner, &github_runner);
+        assert!(result.is_ok());
+
+        // Verify that all 3 PRs were created
+        let calls = github_runner.pr_creation_calls.borrow();
+        assert_eq!(calls.len(), 3, "Should create exactly 3 PRs");
     }
 }

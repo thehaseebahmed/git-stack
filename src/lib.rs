@@ -214,6 +214,10 @@ impl GitRunner for MockGitRunner {
             ["fetch", "origin"] => Ok("Mock fetch completed".to_string()),
             ["remote", "get-url", "origin"] => Ok("https://github.com/test/repo.git".to_string()),
             ["pull"] => Ok("Already up to date.".to_string()),
+            ["push", "-u", "origin", branch_name] => Ok(format!(
+                "Branch '{}' set up to track remote branch",
+                branch_name
+            )),
             ["rebase", "--update-refs", _] => Ok("Successfully rebased".to_string()),
             ["config", "--get", key] if key.starts_with("branch.") => {
                 // For remote tracking branches, return "origin" for most branches
@@ -365,6 +369,13 @@ pub mod git {
         };
 
         git_runner.run_command(&["rebase", "--update-refs", &rebase_onto])?;
+        Ok(())
+    }
+
+    /// Push a specific branch to remote origin
+    pub fn push_branch(git_runner: &dyn GitRunner, branch_name: &str) -> Result<()> {
+        // Push the branch to origin, creating it if it doesn't exist
+        git_runner.run_command(&["push", "-u", "origin", branch_name])?;
         Ok(())
     }
 
@@ -854,18 +865,46 @@ pub mod commands {
             if let Some(pr_num) = github_runner.list_pull_requests_for_branch(branch)? {
                 println!("  ✓ {} already has PR #{}", branch, pr_num);
                 pr_numbers.insert(branch.clone(), pr_num);
+            } else {
+                println!("  - {} needs PR creation", branch);
             }
         }
 
+        // Check if all PRs already exist
+        if pr_numbers.len() == stack_branches.len() {
+            println!("\n✅ All PRs already exist for this stack:");
+            for branch in &stack_branches {
+                if let Some(pr_num) = pr_numbers.get(branch) {
+                    println!("  {} -> PR #{}", branch, pr_num);
+                }
+            }
+            return Ok(());
+        }
+
         // Create PRs for branches that don't have them
-        println!("\n🚀 Creating pull requests...");
+        println!("\n🚀 Creating missing pull requests...");
         let mut dependency_pr: Option<u32> = None;
+        let mut previous_branch: Option<String> = None;
 
         for branch in &stack_branches {
-            if pr_numbers.contains_key(branch) {
-                // This branch already has a PR, use it as dependency for next
-                dependency_pr = pr_numbers.get(branch).copied();
+            // If this branch already has a PR, skip creation but update tracking
+            if let Some(existing_pr) = pr_numbers.get(branch) {
+                println!("  ✓ {} already has PR #{} (skipping)", branch, existing_pr);
+                dependency_pr = Some(*existing_pr);
+                previous_branch = Some(branch.clone());
                 continue;
+            }
+
+            // Push the branch to remote first
+            println!("  • Pushing branch {} to remote...", branch);
+            match git::push_branch(git_runner, branch) {
+                Ok(()) => {
+                    println!("    ✓ Branch pushed to remote");
+                }
+                Err(e) => {
+                    println!("    ❌ Failed to push branch: {}", e);
+                    return Err(e);
+                }
             }
 
             // Parse branch to get index for title
@@ -879,12 +918,20 @@ pub mod commands {
                     "".to_string()
                 };
 
+                // Determine the correct base branch
+                let base_branch = if let Some(ref prev_branch) = previous_branch {
+                    prev_branch
+                } else {
+                    &default_branch
+                };
+
                 println!("  • Creating PR for {}: '{}'", branch, title);
 
-                match github_runner.create_pull_request(branch, &title, &body, &default_branch) {
+                match github_runner.create_pull_request(branch, &title, &body, base_branch) {
                     Ok(pr_num) => {
                         println!("    ✓ Created PR #{}", pr_num);
                         dependency_pr = Some(pr_num);
+                        previous_branch = Some(branch.clone());
                         pr_numbers.insert(branch.clone(), pr_num);
                     }
                     Err(e) => {
