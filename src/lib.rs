@@ -843,7 +843,7 @@ pub mod commands {
         }
 
         // Get default branch for PR base
-        let default_branch = github_runner.get_default_branch()?;
+        let default_branch = git::get_default_branch(git_runner)?;
 
         // Analyze existing PRs for the stack
         let mut pr_numbers: std::collections::HashMap<String, u32> =

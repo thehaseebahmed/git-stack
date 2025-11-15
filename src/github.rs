@@ -17,9 +17,6 @@ pub trait GitHubRunner {
 
     /// List pull requests for a specific branch and return the PR number if it exists
     fn list_pull_requests_for_branch(&self, branch: &str) -> Result<Option<u32>>;
-
-    /// Get the default branch name from GitHub
-    fn get_default_branch(&self) -> Result<String>;
 }
 
 /// Real GitHub CLI command runner for production use
@@ -155,46 +152,6 @@ impl GitHubRunner for RealGitHubRunner {
 
         Ok(None)
     }
-
-    fn get_default_branch(&self) -> Result<String> {
-        let output = Command::new("gh")
-            .args(["repo", "view", "--json", "defaultBranch"])
-            .output()
-            .map_err(|e| {
-                GitStackError::GitHubOperationFailed(format!("Failed to get default branch: {}", e))
-            })?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(GitStackError::GitHubOperationFailed(format!(
-                "Failed to get default branch: {}",
-                stderr
-            )));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        // Parse JSON output to extract default branch
-        for line in stdout.lines() {
-            if line.contains("\"defaultBranch\":") {
-                if let Some(branch_part) = line.split("\"defaultBranch\":").nth(1) {
-                    if let Some(branch_str) = branch_part
-                        .split(',')
-                        .next()
-                        .or_else(|| branch_part.split('}').next())
-                    {
-                        let branch_name = branch_str.trim().trim_matches('"');
-                        if !branch_name.is_empty() {
-                            return Ok(branch_name.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        // Fallback to "main" if parsing fails
-        Ok("main".to_string())
-    }
 }
 
 /// Mock GitHub CLI runner for testing
@@ -205,7 +162,6 @@ pub struct MockGitHubRunner {
     pub should_fail_operations: bool,
     pub existing_prs: std::collections::HashMap<String, u32>,
     pub next_pr_number: u32,
-    pub default_branch: String,
 }
 
 impl MockGitHubRunner {
@@ -216,7 +172,6 @@ impl MockGitHubRunner {
             should_fail_operations: false,
             existing_prs: std::collections::HashMap::new(),
             next_pr_number: 1,
-            default_branch: "main".to_string(),
         }
     }
 
@@ -240,11 +195,6 @@ impl MockGitHubRunner {
         if pr_number >= self.next_pr_number {
             self.next_pr_number = pr_number + 1;
         }
-        self
-    }
-
-    pub fn with_default_branch(mut self, branch: &str) -> Self {
-        self.default_branch = branch.to_string();
         self
     }
 }
@@ -296,16 +246,6 @@ impl GitHubRunner for MockGitHubRunner {
 
         Ok(self.existing_prs.get(branch).copied())
     }
-
-    fn get_default_branch(&self) -> Result<String> {
-        if self.should_fail_operations {
-            return Err(GitStackError::GitHubOperationFailed(
-                "Mock default branch failure".to_string(),
-            ));
-        }
-
-        Ok(self.default_branch.clone())
-    }
 }
 
 #[cfg(test)]
@@ -346,15 +286,6 @@ mod tests {
     }
 
     #[test]
-    fn test_mock_github_runner_default_branch() {
-        let runner = MockGitHubRunner::new();
-        assert_eq!(runner.get_default_branch().unwrap(), "main");
-
-        let runner = runner.with_default_branch("master");
-        assert_eq!(runner.get_default_branch().unwrap(), "master");
-    }
-
-    #[test]
     fn test_mock_github_runner_operation_failures() {
         let runner = MockGitHubRunner::new().with_operation_failure();
 
@@ -362,6 +293,5 @@ mod tests {
             .create_pull_request("feature/1", "Feature #1", "Description", "main")
             .is_err());
         assert!(runner.list_pull_requests_for_branch("feature/1").is_err());
-        assert!(runner.get_default_branch().is_err());
     }
 }
