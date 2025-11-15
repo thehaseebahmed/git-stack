@@ -433,4 +433,70 @@ pub mod commands {
     pub fn current_branch(git_runner: &dyn GitRunner) -> Result<String> {
         git::get_current_branch(git_runner)
     }
+
+    /// List all git stacks in the repository
+    pub fn list_stacks(git_runner: &dyn GitRunner) -> Result<()> {
+        git::check_repository(git_runner)?;
+        
+        // Get all branches
+        let branches = git::list_branches(git_runner)?;
+        
+        // Parse stack branches and group them
+        let stacks = analyze_stacks(&branches);
+        
+        // Display the stacks in tree format
+        display_stacks(&stacks);
+        
+        Ok(())
+    }
+
+    /// Analyze branches to extract stack information
+    pub fn analyze_stacks(branches: &[String]) -> std::collections::BTreeMap<String, Vec<u32>> {
+        let mut stacks: std::collections::BTreeMap<String, Vec<u32>> = std::collections::BTreeMap::new();
+        
+        for branch in branches {
+            if let Some(stack_info) = branch::parse_stack_branch(branch) {
+                stacks.entry(stack_info.feature_name)
+                    .or_default()
+                    .push(stack_info.index);
+            }
+        }
+        
+        // Sort indices within each stack
+        for indices in stacks.values_mut() {
+            indices.sort_unstable();
+        }
+        
+        stacks
+    }
+
+    /// Display stacks in tree format
+    fn display_stacks(stacks: &std::collections::BTreeMap<String, Vec<u32>>) {
+        if stacks.is_empty() {
+            println!("No stacks found in this repository.");
+            return;
+        }
+        
+        let stack_names: Vec<_> = stacks.keys().collect();
+        
+        for (stack_idx, (feature_name, indices)) in stacks.iter().enumerate() {
+            let is_last_stack = stack_idx == stack_names.len() - 1;
+            
+            // Print the feature name as the stack root
+            println!("{}", feature_name);
+            
+            // Print each branch in the stack
+            for (branch_idx, index) in indices.iter().enumerate() {
+                let is_last_branch = branch_idx == indices.len() - 1;
+                let prefix = if is_last_branch { "└─" } else { "├─" };
+                
+                println!("{} {}/{}", prefix, feature_name, index);
+            }
+            
+            // Add spacing between stacks (except after the last one)
+            if !is_last_stack {
+                println!();
+            }
+        }
+    }
 }

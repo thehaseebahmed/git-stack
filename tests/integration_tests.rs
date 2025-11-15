@@ -12,6 +12,7 @@ fn test_cli_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("A tool for managing stacked git branches"));
     assert!(stdout.contains("new"));
+    assert!(stdout.contains("list"));
 }
 
 #[test]
@@ -50,6 +51,18 @@ fn test_cli_new_command_invalid_feature_name() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Invalid feature name"));
+}
+
+#[test]
+fn test_cli_list_command() {
+    let output = Command::new("cargo")
+        .args(&["run", "--", "list"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+    // The exact output depends on what branches exist in the test environment,
+    // but the command should succeed
 }
 
 /// Integration test using the git_stack library directly with MockGitRunner
@@ -122,5 +135,28 @@ mod library_integration {
         let result = commands::new_branch(&mock, "first-feature");
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "first-feature/1");
+    }
+
+    #[test]
+    fn test_list_stacks_empty_repo() {
+        let mock = MockGitRunner::new().with_branches(vec!["main".to_string()]);
+
+        let result = commands::list_stacks(&mock);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_list_stacks_with_stacks() {
+        let mock = MockGitRunner::new()
+            .with_branches(vec![
+                "main".to_string(),
+                "feature-auth/1".to_string(),
+                "feature-auth/2".to_string(),
+                "ui-redesign/1".to_string(),
+                "other-branch".to_string(),
+            ]);
+
+        let result = commands::list_stacks(&mock);
+        assert!(result.is_ok());
     }
 }

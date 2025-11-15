@@ -44,6 +44,29 @@ cargo fmt
 
 ## CLI Usage
 
+### Listing Stacks
+
+View all stacks in your repository:
+```bash
+git-stack list
+```
+
+The output shows stacks in a tree format, organized alphabetically by feature name:
+```
+feature-auth
+├─ feature-auth/1
+├─ feature-auth/2
+└─ feature-auth/3
+
+ui-redesign
+└─ ui-redesign/1
+```
+
+If no stacks are found, a friendly message is displayed:
+```
+No stacks found in this repository.
+```
+
 ### Creating New Branches
 
 The behavior of `git-stack new` depends on your current branch context:
@@ -100,6 +123,7 @@ Show help information:
 ```bash
 git-stack --help
 git-stack new --help
+git-stack list --help
 ```
 
 Show version:

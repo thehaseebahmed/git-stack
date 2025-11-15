@@ -20,6 +20,8 @@ enum Commands {
         /// The name of the feature for the new branch (optional - if not provided, continues current stack)
         feature_name: Option<String>,
     },
+    /// List all stacks in the repository
+    List,
 }
 
 fn main() {
@@ -41,6 +43,12 @@ fn main() {
                     println!("Created new branch: {}", branch_name);
                     Ok(())
                 }
+                Err(e) => Err(e),
+            }
+        }
+        Commands::List => {
+            match commands::list_stacks(&git_runner) {
+                Ok(()) => Ok(()),
                 Err(e) => Err(e),
             }
         }
