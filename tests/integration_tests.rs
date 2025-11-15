@@ -147,14 +147,13 @@ mod library_integration {
 
     #[test]
     fn test_list_stacks_with_stacks() {
-        let mock = MockGitRunner::new()
-            .with_branches(vec![
-                "main".to_string(),
-                "feature-auth/1".to_string(),
-                "feature-auth/2".to_string(),
-                "ui-redesign/1".to_string(),
-                "other-branch".to_string(),
-            ]);
+        let mock = MockGitRunner::new().with_branches(vec![
+            "main".to_string(),
+            "feature-auth/1".to_string(),
+            "feature-auth/2".to_string(),
+            "ui-redesign/1".to_string(),
+            "other-branch".to_string(),
+        ]);
 
         let result = commands::list_stacks(&mock);
         assert!(result.is_ok());
