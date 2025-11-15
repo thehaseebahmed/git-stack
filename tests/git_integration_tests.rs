@@ -94,3 +94,19 @@ fn test_complex_branch_scenarios() {
     let current = git::get_current_branch(&mock).unwrap();
     assert_eq!(current, "feature/auth/2");
 }
+
+#[test]
+fn test_git_push_branch() {
+    let git_runner = MockGitRunner::new();
+
+    let result = git::push_branch(&git_runner, "feature-test/1");
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_git_push_branch_failure() {
+    let git_runner = MockGitRunner::new().should_fail();
+
+    let result = git::push_branch(&git_runner, "feature-test/1");
+    assert!(result.is_err());
+}
