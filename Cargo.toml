@@ -1,0 +1,8 @@
+[package]
+name = "git-stack"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "git-stack"
+path = "src/main.rs"
