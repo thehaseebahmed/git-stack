@@ -3,6 +3,13 @@ name = "git-stack"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "git_stack"
+path = "src/lib.rs"
+
 [[bin]]
 name = "git-stack"
 path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
