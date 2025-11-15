@@ -34,6 +34,7 @@ pub enum GitStackError {
     IoError(String),
     FeatureNameRequiredOnBaseBranch(String),
     CannotStartNewStackFromDiff { current_branch: String, attempted_feature: String },
+    InvalidBranchForSync(String),
 }
 
 impl fmt::Display for GitStackError {
@@ -56,6 +57,9 @@ impl fmt::Display for GitStackError {
             }
             GitStackError::CannotStartNewStackFromDiff { current_branch, attempted_feature } => {
                 write!(f, "Cannot start new stack '{}' from existing stack branch '{}'. To start a new stack, first return to a base branch (like 'main') with: git checkout main", attempted_feature, current_branch)
+            }
+            GitStackError::InvalidBranchForSync(branch) => {
+                write!(f, "Cannot sync from branch '{}'. Please switch to a default branch (like 'main') or a stack branch to run sync.", branch)
             }
         }
     }
@@ -176,11 +180,31 @@ impl GitRunner for MockGitRunner {
             ["checkout", "-b", branch_name] => {
                 Ok(format!("Switched to a new branch '{}'", branch_name))
             }
+            ["checkout", branch_name] => {
+                Ok(format!("Switched to branch '{}'", branch_name))
+            }
             ["symbolic-ref", "refs/remotes/origin/HEAD"] => {
                 Ok(format!("refs/remotes/origin/{}", self.default_branch))
             }
             ["config", "--get", "init.defaultBranch"] => {
                 Ok(self.default_branch.clone())
+            }
+            ["fetch", "origin"] => Ok("Mock fetch completed".to_string()),
+            ["remote", "get-url", "origin"] => Ok("https://github.com/test/repo.git".to_string()),
+            ["pull"] => Ok("Already up to date.".to_string()),
+            ["rebase", "--update-refs", _] => Ok("Successfully rebased".to_string()),
+            ["config", "--get", key] if key.starts_with("branch.") => {
+                // For remote tracking branches, return "origin" for most branches
+                if key.ends_with(".remote") && !key.contains("main") {
+                    Ok("origin".to_string())
+                } else {
+                    Err(GitStackError::GitCommandFailed("Not found".to_string()))
+                }
+            }
+            ["rev-parse", "--abbrev-ref", upstream] if upstream.contains("@{upstream}") => {
+                // For upstream branches, return a mock upstream
+                let branch_name = upstream.replace("@{upstream}", "");
+                Ok(format!("origin/{}", branch_name))
             }
             _ => Ok(format!("Mock response for: git {}", args.join(" "))),
         }
@@ -241,6 +265,109 @@ pub mod git {
     /// Create a new git branch and switch to it
     pub fn create_branch(git_runner: &dyn GitRunner, branch_name: &str) -> Result<()> {
         git_runner.run_command(&["checkout", "-b", branch_name])?;
+        Ok(())
+    }
+
+    /// Fetch latest changes from the remote repository
+    pub fn fetch_remote(git_runner: &dyn GitRunner) -> Result<()> {
+        // First check if a remote exists
+        if has_remote(git_runner)? {
+            git_runner.run_command(&["fetch", "origin"])?;
+            Ok(())
+        } else {
+            // Repository has no remote - this is not an error, just log and continue
+            println!("Warning: No remote repository configured. Skipping fetch operation.");
+            Ok(())
+        }
+    }
+
+    /// Check if the repository has a remote configured
+    pub fn has_remote(git_runner: &dyn GitRunner) -> Result<bool> {
+        match git_runner.run_command(&["remote", "get-url", "origin"]) {
+            Ok(_) => Ok(true),
+            Err(GitStackError::GitCommandFailed(_)) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Check out a specific branch
+    pub fn checkout_branch(git_runner: &dyn GitRunner, branch_name: &str) -> Result<()> {
+        git_runner.run_command(&["checkout", branch_name])?;
+        Ok(())
+    }
+
+    /// Pull changes for the current branch
+    pub fn pull_current_branch(git_runner: &dyn GitRunner) -> Result<()> {
+        git_runner.run_command(&["pull"])?;
+        Ok(())
+    }
+
+    /// Check if a specific branch has a remote tracking branch
+    pub fn has_remote_tracking(git_runner: &dyn GitRunner, branch_name: &str) -> Result<bool> {
+        // Use git config to check if the branch has a remote tracking branch
+        let config_key = format!("branch.{}.remote", branch_name);
+        match git_runner.run_command(&["config", "--get", &config_key]) {
+            Ok(remote) => Ok(!remote.trim().is_empty()),
+            Err(GitStackError::GitCommandFailed(_)) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Get the remote tracking branch name for a local branch
+    pub fn get_remote_tracking_branch(git_runner: &dyn GitRunner, branch_name: &str) -> Result<Option<String>> {
+        match git_runner.run_command(&["rev-parse", "--abbrev-ref", &format!("{}@{{upstream}}", branch_name)]) {
+            Ok(upstream) => Ok(Some(upstream.trim().to_string())),
+            Err(GitStackError::GitCommandFailed(_)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Perform rebase with --update-refs to update all branches in a stack
+    pub fn rebase_with_update_refs(git_runner: &dyn GitRunner, _base_branch: &str) -> Result<()> {
+        let default_branch = get_default_branch(git_runner)?;
+        let rebase_onto = if has_remote(git_runner)? {
+            format!("origin/{}", default_branch)
+        } else {
+            default_branch
+        };
+        
+        git_runner.run_command(&["rebase", "--update-refs", &rebase_onto])?;
+        Ok(())
+    }
+
+    /// Pull changes for a specific branch (checkout, pull, return to original branch)
+    pub fn pull_branch(git_runner: &dyn GitRunner, branch_name: &str, original_branch: &str) -> Result<()> {
+        // Check if branch has remote tracking
+        if !has_remote_tracking(git_runner, branch_name)? {
+            println!("  - Skipping {}: no remote tracking branch", branch_name);
+            return Ok(());
+        }
+        
+        println!("  - Pulling changes for {}", branch_name);
+        
+        // Checkout the branch
+        checkout_branch(git_runner, branch_name)?;
+        
+        // Pull changes
+        match pull_current_branch(git_runner) {
+            Ok(()) => {
+                println!("    ✓ Successfully pulled changes");
+            }
+            Err(e) => {
+                // Return to original branch before propagating error
+                let _ = checkout_branch(git_runner, original_branch);
+                return Err(e);
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Pull changes for multiple stack branches
+    pub fn pull_stack_branches(git_runner: &dyn GitRunner, branch_names: &[String], original_branch: &str) -> Result<()> {
+        for branch_name in branch_names {
+            pull_branch(git_runner, branch_name, original_branch)?;
+        }
         Ok(())
     }
 }
@@ -342,6 +469,47 @@ pub mod branch {
     pub fn get_current_context(git_runner: &dyn GitRunner) -> Result<Option<StackInfo>> {
         let current_branch = crate::git::get_current_branch(git_runner)?;
         Ok(parse_stack_branch(&current_branch))
+    }
+
+    /// Find the first existing branch in a stack
+    pub fn find_first_branch_in_stack(git_runner: &dyn GitRunner, feature_name: &str) -> Result<Option<String>> {
+        let branches = crate::git::list_branches(git_runner)?;
+        let mut stack_branches: Vec<(u32, String)> = Vec::new();
+        
+        // Collect all branches for this stack
+        for branch in branches {
+            if let Some(stack_info) = parse_stack_branch(&branch) {
+                if stack_info.feature_name == feature_name {
+                    stack_branches.push((stack_info.index, branch));
+                }
+            }
+        }
+        
+        if stack_branches.is_empty() {
+            return Ok(None);
+        }
+        
+        // Sort by index and return the first (lowest index)
+        stack_branches.sort_by_key(|&(index, _)| index);
+        Ok(Some(stack_branches[0].1.clone()))
+    }
+
+    /// Get all branches for a specific stack feature
+    pub fn get_stack_branches(git_runner: &dyn GitRunner, feature_name: &str) -> Result<Vec<String>> {
+        let branches = crate::git::list_branches(git_runner)?;
+        let mut stack_branches: Vec<(u32, String)> = Vec::new();
+        
+        for branch in branches {
+            if let Some(stack_info) = parse_stack_branch(&branch) {
+                if stack_info.feature_name == feature_name {
+                    stack_branches.push((stack_info.index, branch));
+                }
+            }
+        }
+        
+        // Sort by index to maintain proper ordering
+        stack_branches.sort_by_key(|&(index, _)| index);
+        Ok(stack_branches.into_iter().map(|(_, branch)| branch).collect())
     }
 }
 
@@ -468,6 +636,129 @@ pub mod commands {
         }
         
         stacks
+    }
+
+    /// Synchronize git stacks with the remote repository
+    pub fn sync_stacks(git_runner: &dyn GitRunner) -> Result<()> {
+        git::check_repository(git_runner)?;
+        
+        // Get the current branch to determine sync context
+        let current_branch = git::get_current_branch(git_runner)?;
+        let current_context = branch::parse_stack_branch(&current_branch);
+        let is_on_base_branch = branch::is_base_branch(git_runner, &current_branch)?;
+        
+        // Determine sync scope based on current branch context
+        match (is_on_base_branch, current_context) {
+            // On default branch - sync all stacks
+            (true, _) => {
+                println!("Syncing all stacks from default branch...");
+                sync_all_stacks(git_runner)
+            }
+            // On stack branch - sync current stack only
+            (false, Some(stack_info)) => {
+                println!("Syncing current stack: {}", stack_info.feature_name);
+                sync_current_stack(git_runner, &stack_info)
+            }
+            // On non-stack/non-default branch - error
+            (false, None) => {
+                Err(GitStackError::InvalidBranchForSync(current_branch))
+            }
+        }
+    }
+
+    /// Sync all stacks in the repository
+    fn sync_all_stacks(git_runner: &dyn GitRunner) -> Result<()> {
+        let original_branch = git::get_current_branch(git_runner)?;
+        
+        println!("🔄 Starting sync for all stacks...");
+        
+        // Step 1: Fetch from remote
+        println!("\n1. Fetching from remote...");
+        git::fetch_remote(git_runner)?;
+        
+        // Step 2: Get all stacks
+        let branches = git::list_branches(git_runner)?;
+        let stacks = analyze_stacks(&branches);
+        
+        if stacks.is_empty() {
+            println!("ℹ️  No stacks found in repository");
+            return Ok(());
+        }
+        
+        println!("\n2. Syncing {} stack(s):", stacks.len());
+        
+        // Step 3: Sync each stack
+        for (feature_name, _indices) in &stacks {
+            println!("\n📦 Syncing stack: {}", feature_name);
+            sync_stack_by_name(git_runner, feature_name, &original_branch)?;
+        }
+        
+        // Step 4: Return to original branch
+        println!("\n3. Returning to original branch: {}", original_branch);
+        git::checkout_branch(git_runner, &original_branch)?;
+        
+        println!("✅ All stacks synchronized successfully!");
+        Ok(())
+    }
+    
+    /// Sync the current stack only
+    fn sync_current_stack(git_runner: &dyn GitRunner, stack_info: &branch::StackInfo) -> Result<()> {
+        let original_branch = git::get_current_branch(git_runner)?;
+        
+        println!("🔄 Starting sync for stack: {}", stack_info.feature_name);
+        
+        // Step 1: Fetch from remote
+        println!("\n1. Fetching from remote...");
+        git::fetch_remote(git_runner)?;
+        
+        // Step 2: Sync this stack only
+        println!("\n2. Syncing current stack:");
+        sync_stack_by_name(git_runner, &stack_info.feature_name, &original_branch)?;
+        
+        // Step 3: Return to original branch
+        println!("\n3. Returning to original branch: {}", original_branch);
+        git::checkout_branch(git_runner, &original_branch)?;
+        
+        println!("✅ Stack '{}' synchronized successfully!", stack_info.feature_name);
+        Ok(())
+    }
+
+    /// Sync a specific stack by feature name
+    fn sync_stack_by_name(git_runner: &dyn GitRunner, feature_name: &str, original_branch: &str) -> Result<()> {
+        // Get all branches for this stack
+        let stack_branches = branch::get_stack_branches(git_runner, feature_name)?;
+        
+        if stack_branches.is_empty() {
+            println!("  ⚠️  No branches found for stack '{}'", feature_name);
+            return Ok(());
+        }
+        
+        // Step 1: Pull all branches with remote tracking
+        println!("  • Pulling remote changes:");
+        git::pull_stack_branches(git_runner, &stack_branches, original_branch)?;
+        
+        // Step 2: Find first branch for rebasing
+        if let Some(first_branch) = branch::find_first_branch_in_stack(git_runner, feature_name)? {
+            println!("  • Rebasing stack from: {}", first_branch);
+            
+            // Checkout first branch and rebase
+            git::checkout_branch(git_runner, &first_branch)?;
+            
+            match git::rebase_with_update_refs(git_runner, &first_branch) {
+                Ok(()) => println!("    ✓ Stack rebased successfully"),
+                Err(e) => {
+                    println!("    ❌ Rebase failed: {}", e);
+                    println!("    Please resolve conflicts manually and run 'git rebase --continue'");
+                    // Return to original branch before propagating error
+                    let _ = git::checkout_branch(git_runner, original_branch);
+                    return Err(e);
+                }
+            }
+        } else {
+            println!("  ⚠️  No first branch found for stack '{}'", feature_name);
+        }
+        
+        Ok(())
     }
 
     /// Display stacks in tree format

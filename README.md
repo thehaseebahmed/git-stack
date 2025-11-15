@@ -6,6 +6,10 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
 - **Context-Aware Branch Creation**: Intelligently creates branches based on your current context
   - **From base branches**: Creates new stacks with structured naming (`feature-name/1`, `feature-name/2`, etc.)
   - **From stack branches**: Continues existing stacks or prevents accidental new stack creation
+- **Stack Synchronization**: Efficiently sync your stacks with remote repositories
+  - **Smart Context Detection**: Syncs all stacks from default branch, or current stack from stack branches
+  - **Remote Integration**: Fetches updates and pulls changes for branches with remote tracking
+  - **Automated Rebasing**: Uses `git rebase --update-refs` to maintain proper branch hierarchy
 - **Git Integration**: Seamlessly integrates with your existing git workflow
 - **Error Handling**: Clear, actionable error messages and proper exit codes
 
@@ -67,6 +71,97 @@ If no stacks are found, a friendly message is displayed:
 No stacks found in this repository.
 ```
 
+### Synchronizing Stacks
+
+Keep your stacks synchronized with the remote repository using the sync command. The behavior depends on your current branch context:
+
+#### From default branch (main, master, etc.)
+Sync all stacks in the repository:
+```bash
+git-stack sync
+```
+
+This will:
+1. Fetch the latest changes from the remote repository
+2. Pull changes for all stack branches that have remote tracking
+3. Rebase each stack using `git rebase --update-refs` to maintain branch hierarchy
+4. Return you to the original branch
+
+Example output:
+```
+🔄 Starting sync for all stacks...
+
+1. Fetching from remote...
+
+2. Syncing 2 stack(s):
+
+📦 Syncing stack: feature-auth
+  • Pulling remote changes:
+  - Pulling changes for feature-auth/1
+    ✓ Successfully pulled changes
+  - Pulling changes for feature-auth/2
+    ✓ Successfully pulled changes
+  • Rebasing stack from: feature-auth/1
+    ✓ Stack rebased successfully
+
+📦 Syncing stack: ui-redesign
+  • Pulling remote changes:
+  - Pulling changes for ui-redesign/1
+    ✓ Successfully pulled changes
+  • Rebasing stack from: ui-redesign/1
+    ✓ Stack rebased successfully
+
+3. Returning to original branch: main
+✅ All stacks synchronized successfully!
+```
+
+#### From stack branch
+Sync only the current stack:
+```bash
+# On branch "feature-auth/2"
+git-stack sync
+```
+
+This will:
+1. Fetch the latest changes from the remote repository
+2. Pull changes for all branches in the current stack that have remote tracking
+3. Rebase the current stack using `git rebase --update-refs`
+4. Return you to the original branch
+
+Example output:
+```
+🔄 Starting sync for stack: feature-auth
+
+1. Fetching from remote...
+
+2. Syncing current stack:
+  • Pulling remote changes:
+  - Pulling changes for feature-auth/1
+    ✓ Successfully pulled changes
+  - Pulling changes for feature-auth/2
+    ✓ Successfully pulled changes
+  • Rebasing stack from: feature-auth/1
+    ✓ Stack rebased successfully
+
+3. Returning to original branch: feature-auth/2
+✅ Stack 'feature-auth' synchronized successfully!
+```
+
+#### Error Handling
+If you're on a branch that's neither a default branch nor a stack branch:
+```bash
+# On branch "random-branch"
+git-stack sync
+# Error: Cannot sync from branch 'random-branch'. Please switch to a default branch (like 'main') or a stack branch to run sync.
+```
+
+#### Smart Features
+- **Remote Detection**: Automatically detects and handles repositories with or without remote origins
+- **Selective Pulling**: Only pulls changes for branches that have remote tracking configured
+- **Conflict Handling**: Provides clear guidance when merge conflicts occur during pull or rebase operations
+- **Branch Preservation**: Always returns you to your original branch after sync operations
+- **First Branch Detection**: Intelligently identifies the actual first branch in a stack, even when lower-numbered branches have been merged
+
 ### Creating New Branches
 
 The behavior of `git-stack new` depends on your current branch context:
@@ -124,6 +219,7 @@ Show help information:
 git-stack --help
 git-stack new --help
 git-stack list --help
+git-stack sync --help
 ```
 
 Show version:
@@ -156,7 +252,11 @@ src/
 tests/
 ├── unit_tests.rs           # Unit tests for library functions
 ├── integration_tests.rs    # CLI integration tests
-└── git_integration_tests.rs # Git-specific integration tests
+├── git_integration_tests.rs # Git-specific integration tests
+├── list_command_tests.rs   # List command specific tests
+├── context_tests.rs        # Context-aware behavior tests
+├── sync_tests.rs           # Sync command tests
+└── comprehensive_tests.rs  # Comprehensive edge case tests
 ```
 
 The project follows Rust best practices with a clear separation between:
@@ -182,6 +282,18 @@ cargo test --test integration_tests
 
 # Git integration tests
 cargo test --test git_integration_tests
+
+# List command tests
+cargo test --test list_command_tests
+
+# Sync command tests
+cargo test --test sync_tests
+
+# Context-aware behavior tests
+cargo test --test context_tests
+
+# Comprehensive edge case tests
+cargo test --test comprehensive_tests
 ```
 
 ### Code Quality
@@ -201,11 +313,25 @@ cargo test && cargo clippy && cargo fmt --check
 The core functionality is available as a library:
 
 ```rust
-use git_stack::commands;
+use git_stack::{commands, RealGitRunner};
+
+let git_runner = RealGitRunner;
 
 // Create a new branch
-match commands::new_branch("my-feature") {
+match commands::new_branch_contextual(&git_runner, Some("my-feature")) {
     Ok(branch_name) => println!("Created: {}", branch_name),
+    Err(e) => eprintln!("Error: {}", e),
+}
+
+// List stacks
+match commands::list_stacks(&git_runner) {
+    Ok(()) => println!("Stacks listed successfully"),
+    Err(e) => eprintln!("Error: {}", e),
+}
+
+// Sync stacks
+match commands::sync_stacks(&git_runner) {
+    Ok(()) => println!("Sync completed successfully"),
     Err(e) => eprintln!("Error: {}", e),
 }
 ```

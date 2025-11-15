@@ -22,6 +22,8 @@ enum Commands {
     },
     /// List all stacks in the repository
     List,
+    /// Synchronize git stacks with the remote repository
+    Sync,
 }
 
 fn main() {
@@ -48,6 +50,12 @@ fn main() {
         }
         Commands::List => {
             match commands::list_stacks(&git_runner) {
+                Ok(()) => Ok(()),
+                Err(e) => Err(e),
+            }
+        }
+        Commands::Sync => {
+            match commands::sync_stacks(&git_runner) {
                 Ok(()) => Ok(()),
                 Err(e) => Err(e),
             }
