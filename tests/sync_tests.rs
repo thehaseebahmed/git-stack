@@ -1,4 +1,4 @@
-use git_stack::{commands, branch, git, MockGitRunner};
+use git_stack::{branch, commands, git, MockGitRunner};
 
 #[cfg(test)]
 mod sync_unit_tests {
@@ -52,7 +52,7 @@ mod sync_unit_tests {
         // Should return an error for invalid branch context
         let result = commands::sync_stacks(&git_runner);
         assert!(result.is_err());
-        
+
         // Verify error message mentions the invalid branch
         let error_msg = format!("{}", result.unwrap_err());
         assert!(error_msg.contains("random-branch"));
@@ -61,14 +61,13 @@ mod sync_unit_tests {
 
     #[test]
     fn test_find_first_branch_in_stack() {
-        let git_runner = MockGitRunner::new()
-            .with_branches(vec![
-                "main".to_string(),
-                "feature-auth/2".to_string(),  // Missing /1 (merged)
-                "feature-auth/3".to_string(),
-                "feature-auth/4".to_string(),
-                "feature-ui/1".to_string(),
-            ]);
+        let git_runner = MockGitRunner::new().with_branches(vec![
+            "main".to_string(),
+            "feature-auth/2".to_string(), // Missing /1 (merged)
+            "feature-auth/3".to_string(),
+            "feature-auth/4".to_string(),
+            "feature-ui/1".to_string(),
+        ]);
 
         // Should find feature-auth/2 as first existing branch
         let result = branch::find_first_branch_in_stack(&git_runner, "feature-auth");
@@ -78,8 +77,7 @@ mod sync_unit_tests {
 
     #[test]
     fn test_find_first_branch_no_stack() {
-        let git_runner = MockGitRunner::new()
-            .with_branches(vec!["main".to_string()]);
+        let git_runner = MockGitRunner::new().with_branches(vec!["main".to_string()]);
 
         // Should return None for non-existent stack
         let result = branch::find_first_branch_in_stack(&git_runner, "nonexistent");
@@ -89,24 +87,26 @@ mod sync_unit_tests {
 
     #[test]
     fn test_get_stack_branches() {
-        let git_runner = MockGitRunner::new()
-            .with_branches(vec![
-                "main".to_string(),
-                "feature-auth/3".to_string(),
-                "feature-auth/1".to_string(),
-                "feature-auth/2".to_string(),
-                "feature-ui/1".to_string(),
-            ]);
+        let git_runner = MockGitRunner::new().with_branches(vec![
+            "main".to_string(),
+            "feature-auth/3".to_string(),
+            "feature-auth/1".to_string(),
+            "feature-auth/2".to_string(),
+            "feature-ui/1".to_string(),
+        ]);
 
         // Should return sorted branches for the stack
         let result = branch::get_stack_branches(&git_runner, "feature-auth");
         assert!(result.is_ok());
         let branches = result.unwrap();
-        assert_eq!(branches, vec![
-            "feature-auth/1".to_string(),
-            "feature-auth/2".to_string(),
-            "feature-auth/3".to_string(),
-        ]);
+        assert_eq!(
+            branches,
+            vec![
+                "feature-auth/1".to_string(),
+                "feature-auth/2".to_string(),
+                "feature-auth/3".to_string(),
+            ]
+        );
     }
 
     #[test]

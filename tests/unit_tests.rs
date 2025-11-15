@@ -1,6 +1,4 @@
-use git_stack::branch::{
-    get_next_index_from_branches, parse_stack_branch, validate_feature_name,
-};
+use git_stack::branch::{get_next_index_from_branches, parse_stack_branch, validate_feature_name};
 use git_stack::{GitRunner, GitStackError, MockGitRunner};
 
 #[test]

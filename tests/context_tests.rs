@@ -32,14 +32,14 @@ fn test_parse_stack_branch_invalid() {
 fn test_is_base_branch() {
     let mock_with_main = MockGitRunner::new().with_default_branch("main");
     let mock_with_master = MockGitRunner::new().with_default_branch("master");
-    
+
     // Test with main as default branch
     assert!(is_base_branch(&mock_with_main, "main").unwrap());
     assert!(!is_base_branch(&mock_with_main, "master").unwrap());
     assert!(!is_base_branch(&mock_with_main, "feature").unwrap());
     assert!(!is_base_branch(&mock_with_main, "feature/1").unwrap());
-    
-    // Test with master as default branch  
+
+    // Test with master as default branch
     assert!(is_base_branch(&mock_with_master, "master").unwrap());
     assert!(!is_base_branch(&mock_with_master, "main").unwrap());
     assert!(!is_base_branch(&mock_with_master, "develop").unwrap());

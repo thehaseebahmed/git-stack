@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use git_stack::{commands, RealGitRunner};
+use git_stack::{commands, github::RealGitHubRunner, RealGitRunner};
 use std::process;
 
 /// Command line interface structure for git-stack
@@ -24,11 +24,14 @@ enum Commands {
     List,
     /// Synchronize git stacks with the remote repository
     Sync,
+    /// Create pull requests for a git stack using GitHub CLI
+    Review,
 }
 
 fn main() {
     let cli = Cli::parse();
     let git_runner = RealGitRunner;
+    let github_runner = RealGitHubRunner;
 
     let result = match &cli.command {
         Commands::New { feature_name } => {
@@ -48,18 +51,18 @@ fn main() {
                 Err(e) => Err(e),
             }
         }
-        Commands::List => {
-            match commands::list_stacks(&git_runner) {
-                Ok(()) => Ok(()),
-                Err(e) => Err(e),
-            }
-        }
-        Commands::Sync => {
-            match commands::sync_stacks(&git_runner) {
-                Ok(()) => Ok(()),
-                Err(e) => Err(e),
-            }
-        }
+        Commands::List => match commands::list_stacks(&git_runner) {
+            Ok(()) => Ok(()),
+            Err(e) => Err(e),
+        },
+        Commands::Sync => match commands::sync_stacks(&git_runner) {
+            Ok(()) => Ok(()),
+            Err(e) => Err(e),
+        },
+        Commands::Review => match commands::review_stack(&git_runner, &github_runner) {
+            Ok(()) => Ok(()),
+            Err(e) => Err(e),
+        },
     };
 
     if let Err(error) = result {
