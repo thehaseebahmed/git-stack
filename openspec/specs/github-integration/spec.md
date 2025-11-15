@@ -1,7 +1,7 @@
 # github-integration Specification
 
 ## Purpose
-TBD - created by archiving change add-review-command. Update Purpose after archive.
+This specification defines the requirements and scenarios for integrating GitHub CLI operations into the application. It establishes trait-based abstractions for testability, outlines real and mock implementations for interacting with GitHub pull requests, and ensures consistent and reliable PR creation workflows. The goal is to enable robust, testable, and maintainable GitHub integration within the application's review and stack management commands.
 ## Requirements
 ### Requirement: GitHub CLI trait abstraction
 The application MUST provide a trait-based abstraction for GitHub CLI operations similar to GitRunner.
