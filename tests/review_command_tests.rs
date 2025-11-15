@@ -218,20 +218,6 @@ mod github_runner_integration_tests {
     }
 
     #[test]
-    fn test_github_runner_get_default_branch() {
-        let runner = MockGitHubRunner::new();
-
-        let result = runner.get_default_branch();
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "main");
-
-        let runner = runner.with_default_branch("master");
-        let result = runner.get_default_branch();
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "master");
-    }
-
-    #[test]
     fn test_github_runner_availability_check() {
         let runner = MockGitHubRunner::new();
         assert!(runner.check_availability().is_ok());
@@ -291,10 +277,6 @@ mod pr_analysis_tests {
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
                 Ok(None) // No existing PRs
             }
-
-            fn get_default_branch(&self) -> Result<String> {
-                Ok("main".to_string())
-            }
         }
 
         let github_runner = TestGitHubRunner {
@@ -332,9 +314,6 @@ mod pr_analysis_tests {
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
                 Ok(None)
             }
-            fn get_default_branch(&self) -> Result<String> {
-                Ok("main".to_string())
-            }
         }
 
         let github_runner = TitleTestGitHubRunner;
@@ -369,9 +348,6 @@ mod pr_analysis_tests {
 
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
                 Ok(None)
-            }
-            fn get_default_branch(&self) -> Result<String> {
-                Ok("main".to_string())
             }
         }
 
