@@ -5,7 +5,55 @@
 
 use crate::{GitStackError, Result};
 use serde_json;
+use std::collections::HashMap;
 use std::process::Command;
+
+/// Information about a pull request for display purposes
+#[derive(Debug, Clone, PartialEq)]
+pub struct PullRequestInfo {
+    /// PR number
+    pub number: u32,
+    /// PR title
+    pub title: String,
+    /// PR status (open, draft, merged, changes_requested)
+    pub status: PrStatus,
+}
+
+/// Status of a pull request
+#[derive(Debug, Clone, PartialEq)]
+pub enum PrStatus {
+    Open,
+    Draft,
+    Merged,
+    ChangesRequested,
+}
+
+impl PrStatus {
+    /// Get the display string for the status
+    pub fn display(&self) -> &'static str {
+        match self {
+            PrStatus::Open => "open",
+            PrStatus::Draft => "draft",
+            PrStatus::Merged => "merged",
+            PrStatus::ChangesRequested => "changes requested",
+        }
+    }
+
+    /// Get the color code for terminal display
+    pub fn color_code(&self) -> &'static str {
+        match self {
+            PrStatus::Open => "", // Default color
+            PrStatus::Draft => "\x1b[90m", // Gray
+            PrStatus::Merged => "\x1b[32m", // Green
+            PrStatus::ChangesRequested => "\x1b[33m", // Yellow
+        }
+    }
+    
+    /// Get the reset color code
+    pub fn reset_color() -> &'static str {
+        "\x1b[0m"
+    }
+}
 
 /// Trait for executing GitHub CLI commands - allows for dependency injection
 pub trait GitHubRunner {
@@ -18,6 +66,12 @@ pub trait GitHubRunner {
 
     /// List pull requests for a specific branch and return the PR number if it exists
     fn list_pull_requests_for_branch(&self, branch: &str) -> Result<Option<u32>>;
+
+    /// Get pull request information for a specific branch
+    fn get_pull_request_info(&self, branch: &str) -> Result<Option<PullRequestInfo>>;
+
+    /// Get pull request information for multiple branches in batch
+    fn batch_get_pull_request_info(&self, branches: &[String]) -> Result<HashMap<String, PullRequestInfo>>;
 }
 
 /// Real GitHub CLI command runner for production use
@@ -154,6 +208,88 @@ impl GitHubRunner for RealGitHubRunner {
             }
         }
     }
+
+    fn get_pull_request_info(&self, branch: &str) -> Result<Option<PullRequestInfo>> {
+        let output = Command::new("gh")
+            .args([
+                "pr", "list", "--head", branch, "--json", 
+                "number,title,state,isDraft,reviewDecision,mergedAt", 
+                "--limit", "1",
+            ])
+            .output()
+            .map_err(|e| {
+                GitStackError::GitHubOperationFailed(format!("Failed to get pull request info: {}", e))
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitStackError::GitHubOperationFailed(format!(
+                "Failed to get pull request info: {}",
+                stderr
+            )));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        
+        // Parse JSON output
+        if stdout.trim().is_empty() || stdout.trim() == "[]" {
+            return Ok(None);
+        }
+
+        // Parse JSON using serde_json
+        match serde_json::from_str::<Vec<serde_json::Value>>(&stdout) {
+            Ok(prs) => {
+                if let Some(pr) = prs.first() {
+                    if let (Some(number), Some(title), Some(state), Some(is_draft)) = (
+                        pr.get("number").and_then(|n| n.as_u64()),
+                        pr.get("title").and_then(|t| t.as_str()),
+                        pr.get("state").and_then(|s| s.as_str()),
+                        pr.get("isDraft").and_then(|d| d.as_bool()),
+                    ) {
+                        let merged_at = pr.get("mergedAt").and_then(|m| m.as_str());
+                        let review_decision = pr.get("reviewDecision").and_then(|r| r.as_str());
+
+                        // Determine PR status
+                        let status = if is_draft {
+                            PrStatus::Draft
+                        } else if state == "MERGED" || merged_at.is_some() {
+                            PrStatus::Merged
+                        } else if review_decision == Some("CHANGES_REQUESTED") {
+                            PrStatus::ChangesRequested
+                        } else {
+                            PrStatus::Open
+                        };
+
+                        return Ok(Some(PullRequestInfo {
+                            number: number as u32,
+                            title: title.to_string(),
+                            status,
+                        }));
+                    }
+                }
+                Ok(None)
+            }
+            Err(e) => {
+                Err(GitStackError::GitHubOperationFailed(format!(
+                    "Failed to parse GitHub CLI JSON response: {}",
+                    e
+                )))
+            }
+        }
+    }
+
+    fn batch_get_pull_request_info(&self, branches: &[String]) -> Result<HashMap<String, PullRequestInfo>> {
+        let mut results = HashMap::new();
+        
+        // For now, implement as sequential calls. Could be optimized later with parallel processing
+        for branch in branches {
+            if let Some(pr_info) = self.get_pull_request_info(branch)? {
+                results.insert(branch.clone(), pr_info);
+            }
+        }
+        
+        Ok(results)
+    }
 }
 
 /// Mock GitHub CLI runner for testing
@@ -163,6 +299,7 @@ pub struct MockGitHubRunner {
     pub should_fail_auth: bool,
     pub should_fail_operations: bool,
     pub existing_prs: std::collections::HashMap<String, u32>,
+    pub pr_info: std::collections::HashMap<String, PullRequestInfo>,
     pub next_pr_number: u32,
 }
 
@@ -173,6 +310,7 @@ impl MockGitHubRunner {
             should_fail_auth: false,
             should_fail_operations: false,
             existing_prs: std::collections::HashMap::new(),
+            pr_info: std::collections::HashMap::new(),
             next_pr_number: 1,
         }
     }
@@ -194,6 +332,16 @@ impl MockGitHubRunner {
 
     pub fn with_existing_pr(mut self, branch: &str, pr_number: u32) -> Self {
         self.existing_prs.insert(branch.to_string(), pr_number);
+        if pr_number >= self.next_pr_number {
+            self.next_pr_number = pr_number + 1;
+        }
+        self
+    }
+
+    pub fn with_pr_info(mut self, branch: &str, pr_info: PullRequestInfo) -> Self {
+        let pr_number = pr_info.number;
+        self.existing_prs.insert(branch.to_string(), pr_number);
+        self.pr_info.insert(branch.to_string(), pr_info);
         if pr_number >= self.next_pr_number {
             self.next_pr_number = pr_number + 1;
         }
@@ -247,6 +395,32 @@ impl GitHubRunner for MockGitHubRunner {
         }
 
         Ok(self.existing_prs.get(branch).copied())
+    }
+
+    fn get_pull_request_info(&self, branch: &str) -> Result<Option<PullRequestInfo>> {
+        if self.should_fail_operations {
+            return Err(GitStackError::GitHubOperationFailed(
+                "Mock PR info failure".to_string(),
+            ));
+        }
+
+        Ok(self.pr_info.get(branch).cloned())
+    }
+
+    fn batch_get_pull_request_info(&self, branches: &[String]) -> Result<HashMap<String, PullRequestInfo>> {
+        if self.should_fail_operations {
+            return Err(GitStackError::GitHubOperationFailed(
+                "Mock batch PR info failure".to_string(),
+            ));
+        }
+
+        let mut results = HashMap::new();
+        for branch in branches {
+            if let Some(pr_info) = self.pr_info.get(branch) {
+                results.insert(branch.clone(), pr_info.clone());
+            }
+        }
+        Ok(results)
     }
 }
 
