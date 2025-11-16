@@ -25,6 +25,7 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
 
 - **Visual Stack Overview** (`git-stack list`)
   - See all your stacks at a glance in a clean tree format
+  - **NEW**: View PR numbers and status directly in the terminal with color-coded indicators
   - Understand branch relationships and stack structure instantly
   - Track progress across multiple feature development streams
 
@@ -32,13 +33,15 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
   git-stack list
   ```
   ```
-  feature-auth
-  ├─ feature-auth/1
-  ├─ feature-auth/2
-  └─ feature-auth/3
+  auth-system
+  ├─ auth-system/1 #432 (merged)            [displayed in green]
+  ├─ auth-system/2 #445 (open)              [default color]
+  ├─ auth-system/3 #456 (changes requested) [displayed in yellow]
+  └─ auth-system/4 #459 (draft)             [displayed in gray]
 
-  ui-redesign
-  └─ ui-redesign/1
+  payment-flow
+  ├─ payment-flow/1 #401 (merged)           [displayed in green]
+  └─ payment-flow/2                         [no PR yet - default color]
   ```
 
 ### 🔄 Stack Synchronization
@@ -122,11 +125,6 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
   - Rebase remaining stack onto updated main after each merge
   - Handle the entire "merge-and-rebase dance" in one command
 
-- **Enhanced Stack Visibility**
-  - Show PR review status directly in `git-stack list` (Pending, Approved, Changes Requested)
-  - Display which branches have been pushed to remote
-  - Indicate merge conflicts or rebase issues in stack overview
-
 - **Advanced PR Management**
   - Automatic base branch updates when parent PRs are merged
   - Smart handling of stack reordering and dependency chain updates
@@ -181,7 +179,8 @@ git-stack review
 - Must be run from within a git repository
 - Feature names can only contain alphanumeric characters, hyphens, and underscores
 - Git must be available in your system PATH
-- GitHub CLI required for PR operations (`git-stack review`)
+- GitHub CLI required for PR operations (`git-stack review`) and enhanced list view with PR information
+  - If GitHub CLI is not available or authentication fails, `git-stack list` gracefully falls back to standard tree display
 
 ---
 
@@ -304,8 +303,11 @@ match commands::new_branch_contextual(&git_runner, Some("my-feature")) {
     Err(e) => eprintln!("Error: {}", e),
 }
 
-// List stacks
+// List stacks (basic)
 commands::list_stacks(&git_runner)?;
+
+// List stacks with PR information
+commands::list_stacks_with_github(&git_runner, Some(&github_runner))?;
 
 // Sync stacks
 commands::sync_stacks(&git_runner)?;
