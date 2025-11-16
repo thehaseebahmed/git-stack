@@ -3,15 +3,131 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
 
 ## Features
 
-- **Context-Aware Branch Creation**: Intelligently creates branches based on your current context
-  - **From base branches**: Creates new stacks with structured naming (`feature-name/1`, `feature-name/2`, etc.)
-  - **From stack branches**: Continues existing stacks or prevents accidental new stack creation
-- **Stack Synchronization**: Efficiently sync your stacks with remote repositories
-  - **Smart Context Detection**: Syncs all stacks from default branch, or current stack from stack branches
-  - **Remote Integration**: Fetches updates and pulls changes for branches with remote tracking
-  - **Automated Rebasing**: Uses `git rebase --update-refs` to maintain proper branch hierarchy
-- **Git Integration**: Seamlessly integrates with your existing git workflow
-- **Error Handling**: Clear, actionable error messages and proper exit codes
+### 🌳 Stack Creation & Management
+
+- **Smart Branch Creation** (`git-stack new`)
+  - Create stacked branches with automatic naming (`feature-auth/1`, `feature-auth/2`, etc.)
+  - Continue existing stacks or start new ones based on your current context
+  - No more manual branch naming or index tracking
+
+  ```bash
+  # From main branch - start a new stack
+  git-stack new auth
+  # Creates "auth/1"
+
+  # From stack branch - continue the stack
+  git-stack new
+  # Creates "auth/2" (if on auth/1)
+  ```
+
+- **Visual Stack Overview** (`git-stack list`)
+  - See all your stacks at a glance in a clean tree format
+  - Understand branch relationships and stack structure instantly
+  - Track progress across multiple feature development streams
+
+  ```bash
+  git-stack list
+  ```
+  ```
+  feature-auth
+  ├─ feature-auth/1
+  ├─ feature-auth/2
+  └─ feature-auth/3
+
+  ui-redesign
+  └─ ui-redesign/1
+  ```
+
+### 🔄 Stack Synchronization
+
+- **One-Command Stack Sync** (`git-stack sync`)
+  - Keep entire stacks up-to-date with latest main branch
+  - Automatically rebase all dependent branches when you change a parent
+  - Context-aware: sync all stacks or just your current one
+
+  ```bash
+  # From main - sync all stacks
+  git-stack sync
+  ```
+  ```
+  🔄 Starting sync for all stacks...
+  1. Fetching from remote...
+  2. Syncing 2 stack(s):
+
+  📦 Syncing stack: feature-auth
+    ✓ Stack rebased successfully
+  ✅ All stacks synchronized successfully!
+  ```
+
+- **Remote Integration**
+  - Pull latest changes from remote for all stack branches
+  - Handle mixed local/remote branch scenarios seamlessly
+  - Works with or without configured git remotes
+
+### 🚀 GitHub Workflow
+
+- **Automated Pull Request Creation** (`git-stack review`)
+  - Create PRs for entire stacks with proper dependency chains
+  - Automatic PR titles and descriptions with stack context
+  - Smart detection of existing PRs to avoid duplicates
+  - Set up proper PR relationships so reviewers understand dependencies
+
+  ```bash
+  # From any stack branch
+  git-stack review
+  ```
+  ```
+  🔄 Creating pull requests for stack: feature-auth
+  📦 Found 3 branch(es) in stack:
+    - feature-auth/1
+    - feature-auth/2
+    - feature-auth/3
+  🚀 Creating missing pull requests...
+    ✓ Created PR #101 for feature-auth/1
+    ✓ Created PR #102 for feature-auth/2 (Depends on #101)
+  ✅ Review summary:
+    feature-auth/1 -> PR #101
+    feature-auth/2 -> PR #102
+  ```
+
+- **GitHub CLI Integration**
+  - Leverages GitHub CLI for reliable PR operations
+  - Handles authentication and repository validation automatically
+
+### 🎯 Developer Experience
+
+- **Context-Aware Commands**
+  - Commands adapt behavior based on whether you're on main, a stack branch, or other branches
+  - Helpful error messages that guide you to the right action
+  - Prevents common mistakes like creating new stacks from the wrong branch
+
+- **Git Workflow Compatible**
+  - Use regular git commands (`git commit --amend`, `git rebase -i`) alongside git-stack
+  - `git-stack sync` handles propagating changes up the stack automatically
+  - No lock-in - your branches are just regular git branches
+
+### 🛣️ Roadmap
+
+- **Interactive Stack Rebase** (`git-stack rebase`)
+  - Simplified interactive rebase that only shows commits from your current stack
+  - No more getting overwhelmed by long git history or accidentally modifying main commits
+  - Stack-aware commit reordering, squashing, and editing
+
+- **Automated Landing** (`git-stack land`)
+  - Merge approved PRs sequentially with automatic stack updates
+  - Check approval status and merge bottom-most diff automatically
+  - Rebase remaining stack onto updated main after each merge
+  - Handle the entire "merge-and-rebase dance" in one command
+
+- **Enhanced Stack Visibility**
+  - Show PR review status directly in `git-stack list` (Pending, Approved, Changes Requested)
+  - Display which branches have been pushed to remote
+  - Indicate merge conflicts or rebase issues in stack overview
+
+- **Advanced PR Management**
+  - Automatic base branch updates when parent PRs are merged
+  - Smart handling of stack reordering and dependency chain updates
+  - Bulk operations for updating PR descriptions and dependencies
 
 ## Building from Source
 
@@ -46,173 +162,7 @@ Format code:
 cargo fmt
 ```
 
-## CLI Usage
-
-### Listing Stacks
-
-View all stacks in your repository:
-```bash
-git-stack list
-```
-
-The output shows stacks in a tree format, organized alphabetically by feature name:
-```
-feature-auth
-├─ feature-auth/1
-├─ feature-auth/2
-└─ feature-auth/3
-
-ui-redesign
-└─ ui-redesign/1
-```
-
-If no stacks are found, a friendly message is displayed:
-```
-No stacks found in this repository.
-```
-
-### Synchronizing Stacks
-
-Keep your stacks synchronized with the remote repository using the sync command. The behavior depends on your current branch context:
-
-#### From default branch (main, master, etc.)
-Sync all stacks in the repository:
-```bash
-git-stack sync
-```
-
-This will:
-1. Fetch the latest changes from the remote repository
-2. Pull changes for all stack branches that have remote tracking
-3. Rebase each stack using `git rebase --update-refs` to maintain branch hierarchy
-4. Return you to the original branch
-
-Example output:
-```
-🔄 Starting sync for all stacks...
-
-1. Fetching from remote...
-
-2. Syncing 2 stack(s):
-
-📦 Syncing stack: feature-auth
-  • Pulling remote changes:
-  - Pulling changes for feature-auth/1
-    ✓ Successfully pulled changes
-  - Pulling changes for feature-auth/2
-    ✓ Successfully pulled changes
-  • Rebasing stack from: feature-auth/1
-    ✓ Stack rebased successfully
-
-📦 Syncing stack: ui-redesign
-  • Pulling remote changes:
-  - Pulling changes for ui-redesign/1
-    ✓ Successfully pulled changes
-  • Rebasing stack from: ui-redesign/1
-    ✓ Stack rebased successfully
-
-3. Returning to original branch: main
-✅ All stacks synchronized successfully!
-```
-
-#### From stack branch
-Sync only the current stack:
-```bash
-# On branch "feature-auth/2"
-git-stack sync
-```
-
-This will:
-1. Fetch the latest changes from the remote repository
-2. Pull changes for all branches in the current stack that have remote tracking
-3. Rebase the current stack using `git rebase --update-refs`
-4. Return you to the original branch
-
-Example output:
-```
-🔄 Starting sync for stack: feature-auth
-
-1. Fetching from remote...
-
-2. Syncing current stack:
-  • Pulling remote changes:
-  - Pulling changes for feature-auth/1
-    ✓ Successfully pulled changes
-  - Pulling changes for feature-auth/2
-    ✓ Successfully pulled changes
-  • Rebasing stack from: feature-auth/1
-    ✓ Stack rebased successfully
-
-3. Returning to original branch: feature-auth/2
-✅ Stack 'feature-auth' synchronized successfully!
-```
-
-#### Error Handling
-If you're on a branch that's neither a default branch nor a stack branch:
-```bash
-# On branch "random-branch"
-git-stack sync
-# Error: Cannot sync from branch 'random-branch'. Please switch to a default branch (like 'main') or a stack branch to run sync.
-```
-
-#### Smart Features
-- **Remote Detection**: Automatically detects and handles repositories with or without remote origins
-- **Selective Pulling**: Only pulls changes for branches that have remote tracking configured
-- **Conflict Handling**: Provides clear guidance when merge conflicts occur during pull or rebase operations
-- **Branch Preservation**: Always returns you to your original branch after sync operations
-- **First Branch Detection**: Intelligently identifies the actual first branch in a stack, even when lower-numbered branches have been merged
-
-### Creating New Branches
-
-The behavior of `git-stack new` depends on your current branch context:
-
-#### From base branches (main, master, etc.)
-Create a new stacked branch for a feature:
-```bash
-git-stack new <feature-name>
-```
-
-Examples:
-```bash
-# Creates branch "auth/1" from current branch
-git-stack new auth
-
-# If auth/1 already exists, creates "auth/2"
-git-stack new auth
-
-# Creates branch "ui-redesign/1"
-git-stack new ui-redesign
-```
-
-#### From existing stack branches
-Continue the current stack without specifying a feature name:
-```bash
-git-stack new
-# or
-git-stack new .
-```
-
-Examples:
-```bash
-# On branch "feature-auth/2"
-git-stack new
-# Creates "feature-auth/3"
-
-# On branch "ui-redesign/1" 
-git-stack new .
-# Creates "ui-redesign/2"
-```
-
-#### Error Prevention
-Attempting to start a new stack from an existing stack branch will show a helpful error:
-```bash
-# On branch "feature-auth/2"
-git-stack new different-feature
-# Error: Cannot start new stack 'different-feature' from existing stack branch 'feature-auth/2'. 
-# To start a new stack, first return to a base branch (like 'main') with: git checkout main
-```
-
-### Help and Version
+## Help and Version
 
 Show help information:
 ```bash
@@ -220,6 +170,7 @@ git-stack --help
 git-stack new --help
 git-stack list --help
 git-stack sync --help
+git-stack review --help
 ```
 
 Show version:
