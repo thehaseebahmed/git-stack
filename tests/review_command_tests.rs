@@ -277,6 +277,14 @@ mod pr_analysis_tests {
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
                 Ok(None) // No existing PRs
             }
+
+            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+                Ok(None)
+            }
+
+            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+                Ok(std::collections::HashMap::new())
+            }
         }
 
         let github_runner = TestGitHubRunner {
@@ -313,6 +321,14 @@ mod pr_analysis_tests {
 
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
                 Ok(None)
+            }
+
+            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+                Ok(None)
+            }
+
+            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+                Ok(std::collections::HashMap::new())
             }
         }
 
@@ -370,6 +386,14 @@ mod pr_analysis_tests {
 
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
                 Ok(None)
+            }
+
+            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+                Ok(None)
+            }
+
+            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+                Ok(std::collections::HashMap::new())
             }
         }
 
@@ -430,6 +454,14 @@ mod pr_analysis_tests {
                     _ => Ok(None),
                 }
             }
+
+            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+                Ok(None)
+            }
+
+            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+                Ok(std::collections::HashMap::new())
+            }
         }
 
         let github_runner = ExistingPRsGitHubRunner;
@@ -467,6 +499,14 @@ mod pr_analysis_tests {
 
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
                 Ok(None) // No existing PRs
+            }
+
+            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+                Ok(None)
+            }
+
+            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+                Ok(std::collections::HashMap::new())
             }
         }
 
@@ -592,6 +632,14 @@ mod spec_compliance_tests {
                     _ => Ok(None),                        // No PR exists
                 }
             }
+
+            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+                Ok(None)
+            }
+
+            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+                Ok(std::collections::HashMap::new())
+            }
         }
 
         let github_runner = PartialStackGitHubRunner {
@@ -673,6 +721,14 @@ mod spec_compliance_tests {
 
             fn list_pull_requests_for_branch(&self, _branch: &str) -> Result<Option<u32>> {
                 Ok(None) // No existing PRs
+            }
+
+            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+                Ok(None)
+            }
+
+            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+                Ok(std::collections::HashMap::new())
             }
         }
 
