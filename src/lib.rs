@@ -669,6 +669,11 @@ pub mod commands {
 
     /// List all git stacks in the repository
     pub fn list_stacks(git_runner: &dyn GitRunner) -> Result<()> {
+        list_stacks_with_github(git_runner, None)
+    }
+
+    /// List all git stacks in the repository with optional GitHub integration
+    pub fn list_stacks_with_github(git_runner: &dyn GitRunner, github_runner: Option<&dyn crate::github::GitHubRunner>) -> Result<()> {
         git::check_repository(git_runner)?;
 
         // Get all branches
@@ -677,10 +682,41 @@ pub mod commands {
         // Parse stack branches and group them
         let stacks = analyze_stacks(&branches);
 
-        // Display the stacks in tree format
-        display_stacks(&stacks);
+        // Try to get PR information if GitHub runner is provided
+        let pr_info = if let Some(github) = github_runner {
+            match get_pr_info_for_stacks(github, &stacks) {
+                Ok(info) => Some(info),
+                Err(e) => {
+                    // Log warning but continue with normal display
+                    println!("Warning: Could not fetch PR information: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        // Display the stacks in tree format with PR info if available
+        display_stacks_with_pr_info(&stacks, pr_info.as_ref());
 
         Ok(())
+    }
+
+    /// Get PR information for all branches in the stacks
+    fn get_pr_info_for_stacks(
+        github_runner: &dyn crate::github::GitHubRunner,
+        stacks: &std::collections::BTreeMap<String, Vec<u32>>
+    ) -> Result<std::collections::HashMap<String, crate::github::PullRequestInfo>> {
+        // Collect all branch names
+        let mut all_branches = Vec::new();
+        for (feature_name, indices) in stacks {
+            for index in indices {
+                all_branches.push(format!("{}/{}", feature_name, index));
+            }
+        }
+
+        // Fetch PR information for all branches
+        github_runner.batch_get_pull_request_info(&all_branches)
     }
 
     /// Analyze branches to extract stack information
@@ -999,6 +1035,14 @@ pub mod commands {
 
     /// Display stacks in tree format
     fn display_stacks(stacks: &std::collections::BTreeMap<String, Vec<u32>>) {
+        display_stacks_with_pr_info(stacks, None);
+    }
+
+    /// Display stacks in tree format with optional PR information
+    fn display_stacks_with_pr_info(
+        stacks: &std::collections::BTreeMap<String, Vec<u32>>,
+        pr_info: Option<&std::collections::HashMap<String, crate::github::PullRequestInfo>>
+    ) {
         if stacks.is_empty() {
             println!("No stacks found in this repository.");
             return;
@@ -1017,7 +1061,36 @@ pub mod commands {
                 let is_last_branch = branch_idx == indices.len() - 1;
                 let prefix = if is_last_branch { "└─" } else { "├─" };
 
-                println!("{} {}/{}", prefix, feature_name, index);
+                let branch_name = format!("{}/{}", feature_name, index);
+                
+                // Check if we have PR information for this branch
+                let display_line = if let Some(pr_map) = pr_info {
+                    if let Some(pr) = pr_map.get(&branch_name) {
+                        format!("{} {} #{} ({})", 
+                            prefix, 
+                            branch_name, 
+                            pr.number, 
+                            pr.status.display()
+                        )
+                    } else {
+                        format!("{} {}", prefix, branch_name)
+                    }
+                } else {
+                    format!("{} {}", prefix, branch_name)
+                };
+
+                // Apply color coding if PR information is available
+                if let Some(pr_map) = pr_info {
+                    if let Some(pr) = pr_map.get(&branch_name) {
+                        print!("{}", pr.status.color_code());
+                        println!("{}", display_line);
+                        print!("{}", crate::github::PrStatus::reset_color());
+                    } else {
+                        println!("{}", display_line);
+                    }
+                } else {
+                    println!("{}", display_line);
+                }
             }
 
             // Add spacing between stacks (except after the last one)

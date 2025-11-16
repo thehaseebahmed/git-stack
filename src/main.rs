@@ -51,7 +51,7 @@ fn main() {
                 Err(e) => Err(e),
             }
         }
-        Commands::List => match commands::list_stacks(&git_runner) {
+        Commands::List => match commands::list_stacks_with_github(&git_runner, Some(&github_runner)) {
             Ok(()) => Ok(()),
             Err(e) => Err(e),
         },
