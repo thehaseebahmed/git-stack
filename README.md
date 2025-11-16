@@ -1,4 +1,7 @@
 # git-stack
+
+> **🧪 Experimental Project**: While there are established diff-stacking solutions available, git-stack represents an experiment in developing a production-ready CLI tool using modern AI-assisted development practices. This project was built collaboratively using OpenCode, GitHub Copilot, and OpenSpec with Specification-Driven Development (SDD) methodologies.
+
 git-stack is a developer productivity tool that makes stacked pull requests simple, intuitive, and GitHub‑native. It streamlines the workflow of creating, managing, and merging dependent branches, so you can focus on writing code instead of wrestling with rebases and PR chains.
 
 ## Features
@@ -129,53 +132,48 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
   - Smart handling of stack reordering and dependency chain updates
   - Bulk operations for updating PR descriptions and dependencies
 
-## Building from Source
+## Installation
 
-### Prerequisites
+### Building from Source
+
+#### Prerequisites
 - Rust toolchain (install from [rustup.rs](https://rustup.rs/))
 - Git (must be installed and available in PATH)
+- GitHub CLI (install from [cli.github.com](https://cli.github.com/)) - required for `git-stack review`
 
-### Build Instructions
+#### Build Instructions
 
-Build the project:
 ```bash
-cargo build
-```
+# Clone the repository
+git clone <repository-url>
+cd git-stack
 
-Run tests:
-```bash
-cargo test
-```
-
-Build optimized release version:
-```bash
+# Build the project
 cargo build --release
+
+# The binary will be available at target/release/git-stack
+# Add it to your PATH or copy to a directory in your PATH
 ```
 
-Run linting:
-```bash
-cargo clippy
-```
+## Getting Started
 
-Format code:
-```bash
-cargo fmt
-```
+### Quick Start
 
-## Help and Version
-
-Show help information:
 ```bash
-git-stack --help
-git-stack new --help
-git-stack list --help
-git-stack sync --help
-git-stack review --help
-```
+# Start a new feature stack
+git-stack new auth
 
-Show version:
-```bash
-git-stack --version
+# Continue working on the stack
+git-stack new
+
+# View your stacks
+git-stack list
+
+# Sync with remote
+git-stack sync
+
+# Create PRs for review
+git-stack review
 ```
 
 ## Requirements
@@ -183,16 +181,39 @@ git-stack --version
 - Must be run from within a git repository
 - Feature names can only contain alphanumeric characters, hyphens, and underscores
 - Git must be available in your system PATH
+- GitHub CLI required for PR operations (`git-stack review`)
 
-## Error Handling
+---
 
-The tool provides clear error messages for common issues:
-- Running outside a git repository
-- Invalid feature names (containing spaces or special characters)
-- Git command failures
-- Missing arguments
+# Development & Contributions
 
-## Development
+This section is for developers who want to contribute to git-stack or understand its internals.
+
+## Project Philosophy
+
+git-stack was developed as an experiment in modern AI-assisted development, utilizing:
+- **OpenCode** for development environment and tooling
+- **GitHub Copilot** for code generation and assistance
+- **OpenSpec** for specification-driven development
+- **SDD (Specification-Driven Development)** methodology
+
+The goal was to demonstrate that production-ready CLI tools can be built effectively using AI-assisted development practices while maintaining high code quality and comprehensive testing.
+
+## Development Setup
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd git-stack
+
+# Install development dependencies
+cargo build
+
+# Run tests to verify setup
+cargo test
+```
+
+## Architecture
 
 ### Project Structure
 
@@ -200,6 +221,7 @@ The tool provides clear error messages for common issues:
 src/
 ├── lib.rs          # Core library functionality
 ├── main.rs         # CLI entry point
+├── github.rs       # GitHub CLI integration
 tests/
 ├── unit_tests.rs           # Unit tests for library functions
 ├── integration_tests.rs    # CLI integration tests
@@ -207,47 +229,47 @@ tests/
 ├── list_command_tests.rs   # List command specific tests
 ├── context_tests.rs        # Context-aware behavior tests
 ├── sync_tests.rs           # Sync command tests
+├── review_command_tests.rs # Review command tests
 └── comprehensive_tests.rs  # Comprehensive edge case tests
+openspec/
+├── specs/          # Technical specifications
+└── changes/        # Change proposals and history
 ```
 
-The project follows Rust best practices with a clear separation between:
+The project follows Rust best practices with clear separation between:
 - **Library code** (`src/lib.rs`) - Reusable functionality organized in modules
 - **Binary code** (`src/main.rs`) - Minimal CLI parsing and orchestration
-- **Unit tests** (`tests/unit_tests.rs`) - Test individual functions
-- **Integration tests** (`tests/integration_tests.rs`) - Test CLI behavior end-to-end
+- **Trait abstractions** - `GitRunner` and `GitHubRunner` for dependency injection and testing
+- **Comprehensive testing** - Unit, integration, and comprehensive edge case coverage
+
+### Design Principles
+
+- **Trait-based architecture** for testability and dependency injection
+- **Context-aware behavior** that adapts to current git state
+- **Fail-fast validation** with clear, actionable error messages
+- **Git workflow compatibility** - works alongside regular git commands
+- **Specification-driven development** with formal requirements and scenarios
+
+## Development Workflow
 
 ### Running Tests
 
-Run all tests:
 ```bash
+# Run all tests
 cargo test
-```
 
-Run specific test files:
-```bash
-# Unit tests
+# Run specific test suites
 cargo test --test unit_tests
-
-# Integration tests  
 cargo test --test integration_tests
-
-# Git integration tests
 cargo test --test git_integration_tests
-
-# List command tests
 cargo test --test list_command_tests
-
-# Sync command tests
 cargo test --test sync_tests
-
-# Context-aware behavior tests
 cargo test --test context_tests
-
-# Comprehensive edge case tests
 cargo test --test comprehensive_tests
 ```
 
 ### Code Quality
+
 ```bash
 # Run linting
 cargo clippy
@@ -255,18 +277,26 @@ cargo clippy
 # Format code
 cargo fmt
 
-# Run all checks
+# Run all quality checks
 cargo test && cargo clippy && cargo fmt --check
 ```
 
-### Library Usage
+### Adding New Features
 
-The core functionality is available as a library:
+1. **Write specifications** in `openspec/changes/` following the existing pattern
+2. **Implement with tests** using the trait-based architecture
+3. **Add integration tests** to verify CLI behavior
+4. **Update documentation** including help text and examples
+
+## Library API
+
+The core functionality is available as a library for embedding in other applications:
 
 ```rust
-use git_stack::{commands, RealGitRunner};
+use git_stack::{commands, RealGitRunner, github::RealGitHubRunner};
 
 let git_runner = RealGitRunner;
+let github_runner = RealGitHubRunner;
 
 // Create a new branch
 match commands::new_branch_contextual(&git_runner, Some("my-feature")) {
@@ -275,14 +305,32 @@ match commands::new_branch_contextual(&git_runner, Some("my-feature")) {
 }
 
 // List stacks
-match commands::list_stacks(&git_runner) {
-    Ok(()) => println!("Stacks listed successfully"),
-    Err(e) => eprintln!("Error: {}", e),
-}
+commands::list_stacks(&git_runner)?;
 
 // Sync stacks
-match commands::sync_stacks(&git_runner) {
-    Ok(()) => println!("Sync completed successfully"),
-    Err(e) => eprintln!("Error: {}", e),
-}
+commands::sync_stacks(&git_runner)?;
+
+// Create PRs for review
+commands::review_stack(&git_runner, &github_runner)?;
 ```
+
+## Contributing
+
+We welcome contributions! Please:
+
+1. **Read the specifications** in `openspec/specs/` to understand the requirements
+2. **Follow the existing patterns** for trait-based architecture and testing
+3. **Write comprehensive tests** including edge cases
+4. **Update documentation** for any user-facing changes
+5. **Run the full test suite** before submitting
+
+### Specification-Driven Development
+
+This project uses OpenSpec for formal specifications. When adding features:
+
+1. Create a change proposal in `openspec/changes/`
+2. Define requirements with scenarios in `openspec/specs/`
+3. Implement according to the specifications
+4. Verify implementation matches all scenarios
+
+This ensures consistency, testability, and maintainability across the codebase.
