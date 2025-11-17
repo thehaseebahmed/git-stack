@@ -1,7 +1,16 @@
 # git-integration Specification
 
 ## Purpose
-TBD - created by archiving change implement-new-branch-command. Update Purpose after archive.
+Defines requirements for git operations including repository detection, branch creation, stack analysis, synchronization, and context-aware git command execution.
+
+## Terminology
+This specification uses consistent terminology:
+
+- **Stack**: A collection of related branches under a common feature name (e.g., `feature-auth`, `payment-flow`)
+- **Diff**: An individual branch within a stack (e.g., `feature-auth/1`, `feature-auth/2`)
+- **Base branch**: The default branch (usually `main` or `master`) from which stacks originate
+
+**Note**: While git internally uses "branch" terminology, this spec may use both "branch" (when discussing git internals) and "diff" (when discussing the user-facing stack concept). When in doubt, user-facing output should prefer "diff(s)" for stack branches.
 ## Requirements
 ### Requirement: Git repository detection
 The application MUST verify it's running in a valid git repository before executing git operations.

@@ -2,6 +2,15 @@
 
 ## Purpose
 This specification defines the requirements and scenarios for integrating GitHub CLI operations into the application. It establishes trait-based abstractions for testability, outlines real and mock implementations for interacting with GitHub pull requests, and ensures consistent and reliable PR creation workflows. The goal is to enable robust, testable, and maintainable GitHub integration within the application's review and stack management commands.
+
+## Terminology
+This specification uses consistent terminology:
+
+- **Stack**: A collection of related branches under a common feature name (e.g., `feature-auth`, `payment-flow`)
+- **Diff**: An individual branch within a stack (e.g., `feature-auth/1`, `feature-auth/2`)
+- **PR (Pull Request)**: GitHub pull request associated with a diff
+
+**Note**: In this spec, "branch" may be used when discussing git operations, but user-facing output should use "diff(s)" when referring to stack branches.
 ## Requirements
 ### Requirement: GitHub CLI trait abstraction
 The application MUST provide a trait-based abstraction for GitHub CLI operations similar to GitRunner.

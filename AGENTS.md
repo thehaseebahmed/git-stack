@@ -37,12 +37,35 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 - **Documentation**: Document public APIs with `///` comments
 - **Testing**: Write unit tests with `#[test]`, integration tests in `tests/`
 
+## Terminology (CRITICAL)
+Always use consistent terminology when writing code, documentation, or user-facing output:
+
+- **Stack**: A collection of related branches under a common feature name (e.g., `feature-auth`, `payment-flow`)
+- **Diff**: An individual branch within a stack (e.g., `feature-auth/1`, `feature-auth/2`)
+
+**Examples:**
+```
+feature-auth         ← This is a STACK
+├─ feature-auth/1    ← This is a DIFF
+├─ feature-auth/2    ← This is a DIFF
+└─ feature-auth/3    ← This is a DIFF
+```
+
+**In code and output:**
+- ✅ "Synced 3 diffs" (correct)
+- ❌ "Synced 3 branches" (incorrect)
+- ✅ "feature-auth stack" (correct)
+- ✅ "feature-auth/1 diff" (correct)
+
+**Note**: While git internally uses "branch", git-stack user-facing output should use "diff(s)" for individual stack branches and "stack(s)" for feature groupings.
+
 ## Documentation Requirements
 - **Always update README.md** when implementing user-facing changes:
   - Update command examples if CLI output format changes
   - Add/update feature descriptions for new functionality
   - Update installation/setup instructions if dependencies change
   - Ensure code examples match actual behavior
+  - Use correct terminology (stack/diff, not branch)
 - **Include documentation tasks** in `tasks.md` for every change proposal
 - **Review documentation** before marking implementation complete
 - **Common files to check**: README.md, inline help text, code comments
