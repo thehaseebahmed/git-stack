@@ -1033,11 +1033,6 @@ pub mod commands {
         Ok(())
     }
 
-    /// Display stacks in tree format
-    fn display_stacks(stacks: &std::collections::BTreeMap<String, Vec<u32>>) {
-        display_stacks_with_pr_info(stacks, None);
-    }
-
     /// Display stacks in tree format with optional PR information
     fn display_stacks_with_pr_info(
         stacks: &std::collections::BTreeMap<String, Vec<u32>>,
