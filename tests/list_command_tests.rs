@@ -93,6 +93,7 @@ fn test_list_stacks_with_github_integration() {
         "feature-auth/1".to_string(),
         "feature-auth/2".to_string(),
         "ui-redesign/1".to_string(),
+        "ui-redesign/2".to_string(),
     ]);
 
     let mock_github_runner = MockGitHubRunner::new()
@@ -110,6 +111,11 @@ fn test_list_stacks_with_github_integration() {
             number: 103,
             title: "UI redesign".to_string(),
             status: PrStatus::Draft,
+        })
+        .with_pr_info("ui-redesign/2", PullRequestInfo {
+            number: 104,
+            title: "UI redesign part 2".to_string(),
+            status: PrStatus::Closed,
         });
 
     let result = commands::list_stacks_with_github(&mock_git_runner, Some(&mock_github_runner));
@@ -135,6 +141,7 @@ fn test_pr_status_display() {
     assert_eq!(PrStatus::Open.display(), "open");
     assert_eq!(PrStatus::Draft.display(), "draft");
     assert_eq!(PrStatus::Merged.display(), "merged");
+    assert_eq!(PrStatus::Closed.display(), "closed");
     assert_eq!(PrStatus::ChangesRequested.display(), "changes requested");
 }
 
@@ -143,5 +150,6 @@ fn test_pr_status_colors() {
     assert_eq!(PrStatus::Open.color_code(), "");
     assert_eq!(PrStatus::Draft.color_code(), "\x1b[90m");
     assert_eq!(PrStatus::Merged.color_code(), "\x1b[32m");
+    assert_eq!(PrStatus::Closed.color_code(), "\x1b[31m");
     assert_eq!(PrStatus::ChangesRequested.color_code(), "\x1b[33m");
 }
