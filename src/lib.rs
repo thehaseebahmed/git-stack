@@ -25,9 +25,213 @@
 
 use std::fmt;
 use std::process::Command;
-use indicatif::{ProgressBar, ProgressStyle};
 
 pub mod github;
+
+/// Multi-step process management module
+pub mod process {
+    use indicatif::{ProgressBar, ProgressStyle};
+
+    /// State of a step in a multi-step process
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum StepState {
+        /// Step is pending (not started)
+        Pending,
+        /// Step is currently in progress (with optional spinner)
+        InProgress,
+        /// Step completed successfully
+        Completed,
+        /// Step skipped (not applicable)
+        Skipped,
+    }
+
+    /// A single step in a multi-step process
+    pub struct Step {
+        pub label: String,
+        pub state: StepState,
+        spinner: Option<ProgressBar>,
+    }
+
+    impl Step {
+        fn new(label: String) -> Self {
+            Self {
+                label,
+                state: StepState::Pending,
+                spinner: None,
+            }
+        }
+    }
+
+    /// Manager for multi-step processes with progress indication
+    pub struct MultiStepProcess {
+        title: String,
+        steps: Vec<Step>,
+        current_step: Option<usize>,
+        header_printed: bool,
+    }
+
+    impl MultiStepProcess {
+        /// Create a new multi-step process with a title
+        pub fn new(title: String) -> Self {
+            Self {
+                title,
+                steps: Vec::new(),
+                current_step: None,
+                header_printed: false,
+            }
+        }
+
+        /// Add a step to the process
+        pub fn add_step(&mut self, label: String) -> usize {
+            self.steps.push(Step::new(label));
+            self.steps.len() - 1
+        }
+
+        /// Start the process and print the header
+        pub fn start(&mut self) {
+            if !self.header_printed {
+                println!("┌  {}", self.title);
+                println!("│");
+                self.header_printed = true;
+            }
+        }
+
+        /// Start a specific step (prints its label and optionally shows a spinner)
+        pub fn start_step(&mut self, step_index: usize, use_spinner: bool) {
+            self.ensure_started();
+
+            if step_index >= self.steps.len() {
+                return;
+            }
+
+            // Finish any previous step
+            if let Some(prev_index) = self.current_step {
+                self.finish_step_internal(prev_index);
+            }
+
+            let step = &mut self.steps[step_index];
+            step.state = StepState::InProgress;
+            self.current_step = Some(step_index);
+
+            if use_spinner {
+                let spinner = ProgressBar::new_spinner();
+                spinner.set_style(
+                    ProgressStyle::default_spinner()
+                        .template("{spinner:.cyan} {msg}")
+                        .unwrap()
+                        .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+                );
+                spinner.set_message(step.label.clone());
+                spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+                step.spinner = Some(spinner);
+            } else {
+                println!("◇  {}", step.label);
+            }
+        }
+
+        /// Update the current step's state without finishing it
+        pub fn update_step_state(&mut self, step_index: usize, state: StepState) {
+            if step_index >= self.steps.len() {
+                return;
+            }
+            self.steps[step_index].state = state;
+        }
+
+        /// Update a step's label
+        pub fn update_step_label(&mut self, step_index: usize, label: String) {
+            if step_index >= self.steps.len() {
+                return;
+            }
+            self.steps[step_index].label = label;
+        }
+
+        /// Print a message for the current step (appears indented under the step)
+        pub fn step_message(&self, message: &str) {
+            println!("│  {}", message);
+        }
+
+        /// Start a sub-spinner for a specific operation within a step
+        pub fn start_sub_spinner(&self, message: String) -> ProgressBar {
+            let spinner = ProgressBar::new_spinner();
+            spinner.set_style(
+                ProgressStyle::default_spinner()
+                    .template("│  {spinner:.cyan} {msg}")
+                    .unwrap()
+                    .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+            );
+            spinner.set_message(message);
+            spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+            spinner
+        }
+
+        /// Complete a specific step
+        pub fn complete_step(&mut self, step_index: usize) {
+            if step_index >= self.steps.len() {
+                return;
+            }
+
+            self.finish_step_internal(step_index);
+            self.steps[step_index].state = StepState::Completed;
+
+            if self.current_step == Some(step_index) {
+                self.current_step = None;
+            }
+        }
+
+        /// Skip a specific step
+        pub fn skip_step(&mut self, step_index: usize) {
+            if step_index >= self.steps.len() {
+                return;
+            }
+
+            self.finish_step_internal(step_index);
+            self.steps[step_index].state = StepState::Skipped;
+
+            if self.current_step == Some(step_index) {
+                self.current_step = None;
+            }
+        }
+
+        /// Finish the entire process and print the footer
+        pub fn finish(&mut self) {
+            // Finish any current step
+            if let Some(current) = self.current_step {
+                self.finish_step_internal(current);
+            }
+
+            println!("│");
+            println!("└  All done!");
+        }
+
+        /// Ensure the process has been started
+        fn ensure_started(&mut self) {
+            if !self.header_printed {
+                self.start();
+            }
+        }
+
+        /// Internal method to finish a step (clear spinner, print status)
+        fn finish_step_internal(&mut self, step_index: usize) {
+            if step_index >= self.steps.len() {
+                return;
+            }
+
+            let step = &mut self.steps[step_index];
+
+            // Clear any active spinner
+            if let Some(spinner) = step.spinner.take() {
+                spinner.finish_and_clear();
+
+                // Print the step with its final state
+                match step.state {
+                    StepState::Completed => println!("◆  {}", step.label),
+                    StepState::Skipped => println!("◇  {} (skipped)", step.label),
+                    _ => println!("◇  {}", step.label),
+                }
+            }
+        }
+    }
+}
 
 /// Custom error types for git-stack operations
 #[derive(Debug, PartialEq)]
@@ -674,7 +878,10 @@ pub mod commands {
     }
 
     /// List all git stacks in the repository with optional GitHub integration
-    pub fn list_stacks_with_github(git_runner: &dyn GitRunner, github_runner: Option<&dyn crate::github::GitHubRunner>) -> Result<()> {
+    pub fn list_stacks_with_github(
+        git_runner: &dyn GitRunner,
+        github_runner: Option<&dyn crate::github::GitHubRunner>,
+    ) -> Result<()> {
         git::check_repository(git_runner)?;
 
         // Get all branches
@@ -706,7 +913,7 @@ pub mod commands {
     /// Get PR information for all branches in the stacks
     fn get_pr_info_for_stacks(
         github_runner: &dyn crate::github::GitHubRunner,
-        stacks: &std::collections::BTreeMap<String, Vec<u32>>
+        stacks: &std::collections::BTreeMap<String, Vec<u32>>,
     ) -> Result<std::collections::HashMap<String, crate::github::PullRequestInfo>> {
         // Collect all branch names
         let mut all_branches = Vec::new();
@@ -860,10 +1067,6 @@ pub mod commands {
                 ));
             }
             (false, Some(stack_info)) => {
-                println!(
-                    "┌  Creating PRs for stack: {}",
-                    stack_info.feature_name
-                );
                 create_stack_prs(git_runner, github_runner, &stack_info.feature_name)?;
             }
         }
@@ -877,38 +1080,44 @@ pub mod commands {
         github_runner: &dyn GitHubRunner,
         feature_name: &str,
     ) -> Result<()> {
-        // Get all branches for this stack
+        use crate::process::{MultiStepProcess, StepState};
+
+        // Initialize the multi-step process
+        let mut process =
+            MultiStepProcess::new(format!("Creating PRs for stack: {}", feature_name));
+
+        // Define all steps upfront
+        let step_find_diffs = process.add_step(format!("Found diffs in stack"));
+        let step_check_prs = process.add_step("Checking for existing pull requests...".to_string());
+        let step_create_prs = process.add_step("Created missing pull requests".to_string());
+
+        process.start();
+
+        // Step 1: Get all branches for this stack
         let stack_branches = branch::get_stack_branches(git_runner, feature_name)?;
 
         if stack_branches.is_empty() {
-            println!("│");
-            println!("◇  No diffs found for stack '{}'", feature_name);
-            println!("│");
-            println!("└  All done!");
+            process.start_step(step_find_diffs, false);
+            process.step_message(&format!("No diffs found for stack '{}'", feature_name));
+            process.complete_step(step_find_diffs);
+            process.finish();
             return Ok(());
         }
 
-        println!("│");
-        println!("◇  Found {} diff(s) in stack", stack_branches.len());
-        println!("│");
+        // Update step with actual count
+        process.update_step_label(
+            step_find_diffs,
+            format!("Found {} diff(s) in stack", stack_branches.len()),
+        );
+        process.start_step(step_find_diffs, false);
+        process.complete_step(step_find_diffs);
 
-        // Get default branch for PR base
+        // Step 2: Check for existing PRs
+        process.start_step(step_check_prs, true);
+
         let default_branch = git::get_default_branch(git_runner)?;
-
-        // Analyze existing PRs for the stack
         let mut pr_numbers: std::collections::HashMap<String, u32> =
             std::collections::HashMap::new();
-
-        // Create spinner for checking PRs
-        let spinner = ProgressBar::new_spinner();
-        spinner.set_style(
-            ProgressStyle::default_spinner()
-                .template("{spinner:.cyan} {msg}")
-                .unwrap()
-                .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-        );
-        spinner.set_message("Checking for existing pull requests...");
-        spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
         for branch in &stack_branches {
             if let Some(pr_num) = github_runner.list_pull_requests_for_branch(branch)? {
@@ -916,18 +1125,21 @@ pub mod commands {
             }
         }
 
-        spinner.finish_and_clear();
+        process.complete_step(step_check_prs);
 
         // Check if all PRs already exist
         if pr_numbers.len() == stack_branches.len() {
-            println!("◇  All PRs already exist");
-            println!("│");
-            println!("└  All done!");
+            process.start_step(step_create_prs, false);
+            process.update_step_state(step_create_prs, StepState::Skipped);
+            process.step_message("All PRs already exist");
+            process.skip_step(step_create_prs);
+            process.finish();
             return Ok(());
         }
 
-        // Create PRs for branches that don't have them
-        println!("◆  Created missing pull requests");
+        // Step 3: Create PRs for branches that don't have them
+        process.start_step(step_create_prs, false);
+
         let mut dependency_pr: Option<u32> = None;
         let mut previous_branch: Option<String> = None;
         let mut created_any = false;
@@ -941,22 +1153,14 @@ pub mod commands {
             }
 
             // Create spinner for PR creation
-            let pr_spinner = ProgressBar::new_spinner();
-            pr_spinner.set_style(
-                ProgressStyle::default_spinner()
-                    .template("│  {spinner:.cyan} {msg}")
-                    .unwrap()
-                    .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            );
-            pr_spinner.set_message(format!("Creating PR for {}...", branch));
-            pr_spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+            let pr_spinner = process.start_sub_spinner(format!("Creating PR for {}...", branch));
 
             // Push the branch to remote first
             match git::push_branch(git_runner, branch) {
                 Ok(()) => {}
                 Err(e) => {
                     pr_spinner.finish_and_clear();
-                    println!("│  ✗ Failed to push branch {}: {}", branch, e);
+                    process.step_message(&format!("✗ Failed to push branch {}: {}", branch, e));
                     return Err(e);
                 }
             }
@@ -982,7 +1186,7 @@ pub mod commands {
                 match github_runner.create_pull_request(branch, &title, &body, base_branch) {
                     Ok(pr_num) => {
                         pr_spinner.finish_and_clear();
-                        println!("│  ✓ Created PR #{} for {}", pr_num, branch);
+                        process.step_message(&format!("✓ Created PR #{} for {}", pr_num, branch));
                         dependency_pr = Some(pr_num);
                         previous_branch = Some(branch.clone());
                         pr_numbers.insert(branch.clone(), pr_num);
@@ -990,7 +1194,8 @@ pub mod commands {
                     }
                     Err(e) => {
                         pr_spinner.finish_and_clear();
-                        println!("│  ✗ Failed to create PR for {}: {}", branch, e);
+                        process
+                            .step_message(&format!("✗ Failed to create PR for {}: {}", branch, e));
                         return Err(e);
                     }
                 }
@@ -998,11 +1203,11 @@ pub mod commands {
         }
 
         if !created_any {
-            println!("│  (No new PRs needed)");
+            process.step_message("(No new PRs needed)");
         }
 
-        println!("│");
-        println!("└  All done!");
+        process.complete_step(step_create_prs);
+        process.finish();
 
         Ok(())
     }
@@ -1054,7 +1259,7 @@ pub mod commands {
     /// Display stacks in tree format with optional PR information
     fn display_stacks_with_pr_info(
         stacks: &std::collections::BTreeMap<String, Vec<u32>>,
-        pr_info: Option<&std::collections::HashMap<String, crate::github::PullRequestInfo>>
+        pr_info: Option<&std::collections::HashMap<String, crate::github::PullRequestInfo>>,
     ) {
         if stacks.is_empty() {
             println!("No stacks found in this repository.");
@@ -1075,14 +1280,15 @@ pub mod commands {
                 let prefix = if is_last_branch { "└─" } else { "├─" };
 
                 let branch_name = format!("{}/{}", feature_name, index);
-                
+
                 // Check if we have PR information for this branch
                 let display_line = if let Some(pr_map) = pr_info {
                     if let Some(pr) = pr_map.get(&branch_name) {
-                        format!("{} {} #{} ({})", 
-                            prefix, 
-                            branch_name, 
-                            pr.number, 
+                        format!(
+                            "{} {} #{} ({})",
+                            prefix,
+                            branch_name,
+                            pr.number,
                             pr.status.display()
                         )
                     } else {

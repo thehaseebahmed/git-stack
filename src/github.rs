@@ -44,14 +44,14 @@ impl PrStatus {
     /// Get the color code for terminal display
     pub fn color_code(&self) -> &'static str {
         match self {
-            PrStatus::Open => "", // Default color
-            PrStatus::Draft => "\x1b[90m", // Gray
-            PrStatus::Merged => "\x1b[32m", // Green
-            PrStatus::Closed => "\x1b[31m", // Red
+            PrStatus::Open => "",                     // Default color
+            PrStatus::Draft => "\x1b[90m",            // Gray
+            PrStatus::Merged => "\x1b[32m",           // Green
+            PrStatus::Closed => "\x1b[31m",           // Red
             PrStatus::ChangesRequested => "\x1b[33m", // Yellow
         }
     }
-    
+
     /// Get the reset color code
     pub fn reset_color() -> &'static str {
         "\x1b[0m"
@@ -74,7 +74,10 @@ pub trait GitHubRunner {
     fn get_pull_request_info(&self, branch: &str) -> Result<Option<PullRequestInfo>>;
 
     /// Get pull request information for multiple branches in batch
-    fn batch_get_pull_request_info(&self, branches: &[String]) -> Result<HashMap<String, PullRequestInfo>>;
+    fn batch_get_pull_request_info(
+        &self,
+        branches: &[String],
+    ) -> Result<HashMap<String, PullRequestInfo>>;
 }
 
 /// Real GitHub CLI command runner for production use
@@ -185,7 +188,7 @@ impl GitHubRunner for RealGitHubRunner {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
+
         // Parse JSON output to extract PR number
         if stdout.trim().is_empty() || stdout.trim() == "[]" {
             return Ok(None);
@@ -203,25 +206,33 @@ impl GitHubRunner for RealGitHubRunner {
                 }
                 Ok(None)
             }
-            Err(e) => {
-                Err(GitStackError::GitHubOperationFailed(format!(
-                    "Failed to parse GitHub CLI JSON response: {}",
-                    e
-                )))
-            }
+            Err(e) => Err(GitStackError::GitHubOperationFailed(format!(
+                "Failed to parse GitHub CLI JSON response: {}",
+                e
+            ))),
         }
     }
 
     fn get_pull_request_info(&self, branch: &str) -> Result<Option<PullRequestInfo>> {
         let output = Command::new("gh")
             .args([
-                "pr", "list", "--head", branch, "--state", "all", "--json", 
-                "number,title,state,isDraft,reviewDecision,mergedAt", 
-                "--limit", "1",
+                "pr",
+                "list",
+                "--head",
+                branch,
+                "--state",
+                "all",
+                "--json",
+                "number,title,state,isDraft,reviewDecision,mergedAt",
+                "--limit",
+                "1",
             ])
             .output()
             .map_err(|e| {
-                GitStackError::GitHubOperationFailed(format!("Failed to get pull request info: {}", e))
+                GitStackError::GitHubOperationFailed(format!(
+                    "Failed to get pull request info: {}",
+                    e
+                ))
             })?;
 
         if !output.status.success() {
@@ -233,7 +244,7 @@ impl GitHubRunner for RealGitHubRunner {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
+
         // Parse JSON output
         if stdout.trim().is_empty() || stdout.trim() == "[]" {
             return Ok(None);
@@ -274,25 +285,26 @@ impl GitHubRunner for RealGitHubRunner {
                 }
                 Ok(None)
             }
-            Err(e) => {
-                Err(GitStackError::GitHubOperationFailed(format!(
-                    "Failed to parse GitHub CLI JSON response: {}",
-                    e
-                )))
-            }
+            Err(e) => Err(GitStackError::GitHubOperationFailed(format!(
+                "Failed to parse GitHub CLI JSON response: {}",
+                e
+            ))),
         }
     }
 
-    fn batch_get_pull_request_info(&self, branches: &[String]) -> Result<HashMap<String, PullRequestInfo>> {
+    fn batch_get_pull_request_info(
+        &self,
+        branches: &[String],
+    ) -> Result<HashMap<String, PullRequestInfo>> {
         let mut results = HashMap::new();
-        
+
         // For now, implement as sequential calls. Could be optimized later with parallel processing
         for branch in branches {
             if let Some(pr_info) = self.get_pull_request_info(branch)? {
                 results.insert(branch.clone(), pr_info);
             }
         }
-        
+
         Ok(results)
     }
 }
@@ -412,7 +424,10 @@ impl GitHubRunner for MockGitHubRunner {
         Ok(self.pr_info.get(branch).cloned())
     }
 
-    fn batch_get_pull_request_info(&self, branches: &[String]) -> Result<HashMap<String, PullRequestInfo>> {
+    fn batch_get_pull_request_info(
+        &self,
+        branches: &[String],
+    ) -> Result<HashMap<String, PullRequestInfo>> {
         if self.should_fail_operations {
             return Err(GitStackError::GitHubOperationFailed(
                 "Mock batch PR info failure".to_string(),
