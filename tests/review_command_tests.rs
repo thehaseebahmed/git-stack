@@ -278,11 +278,18 @@ mod pr_analysis_tests {
                 Ok(None) // No existing PRs
             }
 
-            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+            fn get_pull_request_info(
+                &self,
+                _branch: &str,
+            ) -> Result<Option<git_stack::github::PullRequestInfo>> {
                 Ok(None)
             }
 
-            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+            fn batch_get_pull_request_info(
+                &self,
+                _branches: &[String],
+            ) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>>
+            {
                 Ok(std::collections::HashMap::new())
             }
         }
@@ -323,11 +330,18 @@ mod pr_analysis_tests {
                 Ok(None)
             }
 
-            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+            fn get_pull_request_info(
+                &self,
+                _branch: &str,
+            ) -> Result<Option<git_stack::github::PullRequestInfo>> {
                 Ok(None)
             }
 
-            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+            fn batch_get_pull_request_info(
+                &self,
+                _branches: &[String],
+            ) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>>
+            {
                 Ok(std::collections::HashMap::new())
             }
         }
@@ -388,11 +402,18 @@ mod pr_analysis_tests {
                 Ok(None)
             }
 
-            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+            fn get_pull_request_info(
+                &self,
+                _branch: &str,
+            ) -> Result<Option<git_stack::github::PullRequestInfo>> {
                 Ok(None)
             }
 
-            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+            fn batch_get_pull_request_info(
+                &self,
+                _branches: &[String],
+            ) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>>
+            {
                 Ok(std::collections::HashMap::new())
             }
         }
@@ -455,11 +476,18 @@ mod pr_analysis_tests {
                 }
             }
 
-            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+            fn get_pull_request_info(
+                &self,
+                _branch: &str,
+            ) -> Result<Option<git_stack::github::PullRequestInfo>> {
                 Ok(None)
             }
 
-            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+            fn batch_get_pull_request_info(
+                &self,
+                _branches: &[String],
+            ) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>>
+            {
                 Ok(std::collections::HashMap::new())
             }
         }
@@ -501,11 +529,18 @@ mod pr_analysis_tests {
                 Ok(None) // No existing PRs
             }
 
-            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+            fn get_pull_request_info(
+                &self,
+                _branch: &str,
+            ) -> Result<Option<git_stack::github::PullRequestInfo>> {
                 Ok(None)
             }
 
-            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+            fn batch_get_pull_request_info(
+                &self,
+                _branches: &[String],
+            ) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>>
+            {
                 Ok(std::collections::HashMap::new())
             }
         }
@@ -633,11 +668,18 @@ mod spec_compliance_tests {
                 }
             }
 
-            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+            fn get_pull_request_info(
+                &self,
+                _branch: &str,
+            ) -> Result<Option<git_stack::github::PullRequestInfo>> {
                 Ok(None)
             }
 
-            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+            fn batch_get_pull_request_info(
+                &self,
+                _branches: &[String],
+            ) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>>
+            {
                 Ok(std::collections::HashMap::new())
             }
         }
@@ -723,11 +765,18 @@ mod spec_compliance_tests {
                 Ok(None) // No existing PRs
             }
 
-            fn get_pull_request_info(&self, _branch: &str) -> Result<Option<git_stack::github::PullRequestInfo>> {
+            fn get_pull_request_info(
+                &self,
+                _branch: &str,
+            ) -> Result<Option<git_stack::github::PullRequestInfo>> {
                 Ok(None)
             }
 
-            fn batch_get_pull_request_info(&self, _branches: &[String]) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>> {
+            fn batch_get_pull_request_info(
+                &self,
+                _branches: &[String],
+            ) -> Result<std::collections::HashMap<String, git_stack::github::PullRequestInfo>>
+            {
                 Ok(std::collections::HashMap::new())
             }
         }

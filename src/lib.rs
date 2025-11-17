@@ -22,11 +22,13 @@
 //! - [`branch`] - Branch naming and validation
 //! - [`commands`] - High-level command operations
 //! - [`github`] - GitHub CLI integration
+//! - [`process`] - Multi-step process management with progress indicators
 
 use std::fmt;
 use std::process::Command;
 
 pub mod github;
+pub mod process;
 
 /// Custom error types for git-stack operations
 #[derive(Debug, PartialEq)]
@@ -673,7 +675,10 @@ pub mod commands {
     }
 
     /// List all git stacks in the repository with optional GitHub integration
-    pub fn list_stacks_with_github(git_runner: &dyn GitRunner, github_runner: Option<&dyn crate::github::GitHubRunner>) -> Result<()> {
+    pub fn list_stacks_with_github(
+        git_runner: &dyn GitRunner,
+        github_runner: Option<&dyn crate::github::GitHubRunner>,
+    ) -> Result<()> {
         git::check_repository(git_runner)?;
 
         // Get all branches
@@ -705,7 +710,7 @@ pub mod commands {
     /// Get PR information for all branches in the stacks
     fn get_pr_info_for_stacks(
         github_runner: &dyn crate::github::GitHubRunner,
-        stacks: &std::collections::BTreeMap<String, Vec<u32>>
+        stacks: &std::collections::BTreeMap<String, Vec<u32>>,
     ) -> Result<std::collections::HashMap<String, crate::github::PullRequestInfo>> {
         // Collect all branch names
         let mut all_branches = Vec::new();
@@ -859,10 +864,6 @@ pub mod commands {
                 ));
             }
             (false, Some(stack_info)) => {
-                println!(
-                    "🔄 Creating pull requests for stack: {}",
-                    stack_info.feature_name
-                );
                 create_stack_prs(git_runner, github_runner, &stack_info.feature_name)?;
             }
         }
@@ -876,69 +877,87 @@ pub mod commands {
         github_runner: &dyn GitHubRunner,
         feature_name: &str,
     ) -> Result<()> {
-        // Get all branches for this stack
+        use crate::process::{MultiStepProcess, StepState};
+
+        // Initialize the multi-step process
+        let mut process =
+            MultiStepProcess::new(format!("Creating PRs for stack: {}", feature_name));
+
+        // Define all steps upfront
+        let step_find_diffs = process.add_step(format!("Found diffs in stack"));
+        let step_check_prs = process.add_step("Checking for existing pull requests...".to_string());
+        let step_create_prs = process.add_step("Created missing pull requests".to_string());
+
+        process.start();
+
+        // Step 1: Get all branches for this stack
         let stack_branches = branch::get_stack_branches(git_runner, feature_name)?;
 
         if stack_branches.is_empty() {
-            println!("ℹ️  No branches found for stack '{}'", feature_name);
+            process.start_step(step_find_diffs, false);
+            process.step_message(&format!("No diffs found for stack '{}'", feature_name));
+            process.complete_step(step_find_diffs);
+            process.finish();
             return Ok(());
         }
 
-        println!("📦 Found {} branch(es) in stack:", stack_branches.len());
-        for branch in &stack_branches {
-            println!("  - {}", branch);
-        }
+        // Update step with actual count
+        process.update_step_label(
+            step_find_diffs,
+            format!("Found {} diff(s) in stack", stack_branches.len()),
+        );
+        process.start_step(step_find_diffs, false);
+        process.complete_step(step_find_diffs);
 
-        // Get default branch for PR base
+        // Step 2: Check for existing PRs
+        process.start_step(step_check_prs, true);
+
         let default_branch = git::get_default_branch(git_runner)?;
-
-        // Analyze existing PRs for the stack
         let mut pr_numbers: std::collections::HashMap<String, u32> =
             std::collections::HashMap::new();
 
-        println!("\n🔍 Checking for existing pull requests...");
         for branch in &stack_branches {
             if let Some(pr_num) = github_runner.list_pull_requests_for_branch(branch)? {
-                println!("  ✓ {} already has PR #{}", branch, pr_num);
                 pr_numbers.insert(branch.clone(), pr_num);
-            } else {
-                println!("  - {} needs PR creation", branch);
             }
         }
+
+        process.complete_step(step_check_prs);
 
         // Check if all PRs already exist
         if pr_numbers.len() == stack_branches.len() {
-            println!("\n✅ All PRs already exist for this stack:");
-            for branch in &stack_branches {
-                if let Some(pr_num) = pr_numbers.get(branch) {
-                    println!("  {} -> PR #{}", branch, pr_num);
-                }
-            }
+            process.start_step(step_create_prs, false);
+            process.update_step_state(step_create_prs, StepState::Skipped);
+            process.step_message("All PRs already exist");
+            process.skip_step(step_create_prs);
+            process.finish();
             return Ok(());
         }
 
-        // Create PRs for branches that don't have them
-        println!("\n🚀 Creating missing pull requests...");
+        // Step 3: Create PRs for branches that don't have them
+        process.start_step(step_create_prs, false);
+
         let mut dependency_pr: Option<u32> = None;
         let mut previous_branch: Option<String> = None;
+        let mut created_any = false;
 
         for branch in &stack_branches {
             // If this branch already has a PR, skip creation but update tracking
             if let Some(existing_pr) = pr_numbers.get(branch) {
-                println!("  ✓ {} already has PR #{} (skipping)", branch, existing_pr);
                 dependency_pr = Some(*existing_pr);
                 previous_branch = Some(branch.clone());
                 continue;
             }
 
+            // Create spinner for PR creation
+            let pr_spinner = process.start_sub_spinner(format!("Creating PR for {}...", branch));
+
             // Push the branch to remote first
-            println!("  • Pushing branch {} to remote...", branch);
             match git::push_branch(git_runner, branch) {
-                Ok(()) => {
-                    println!("    ✓ Branch pushed to remote");
-                }
+                Ok(()) => {}
                 Err(e) => {
-                    println!("    ❌ Failed to push branch: {}", e);
+                    pr_spinner.finish_and_clear();
+                    process.step_message(&format!("✗ Failed to push branch {}: {}", branch, e));
                     return Err(e);
                 }
             }
@@ -961,30 +980,31 @@ pub mod commands {
                     &default_branch
                 };
 
-                println!("  • Creating PR for {}: '{}'", branch, title);
-
                 match github_runner.create_pull_request(branch, &title, &body, base_branch) {
                     Ok(pr_num) => {
-                        println!("    ✓ Created PR #{}", pr_num);
+                        pr_spinner.finish_and_clear();
+                        process.step_message(&format!("✓ Created PR #{} for {}", pr_num, branch));
                         dependency_pr = Some(pr_num);
                         previous_branch = Some(branch.clone());
                         pr_numbers.insert(branch.clone(), pr_num);
+                        created_any = true;
                     }
                     Err(e) => {
-                        println!("    ❌ Failed to create PR: {}", e);
+                        pr_spinner.finish_and_clear();
+                        process
+                            .step_message(&format!("✗ Failed to create PR for {}: {}", branch, e));
                         return Err(e);
                     }
                 }
             }
         }
 
-        // Print summary
-        println!("\n✅ Review summary:");
-        for branch in &stack_branches {
-            if let Some(pr_num) = pr_numbers.get(branch) {
-                println!("  {} -> PR #{}", branch, pr_num);
-            }
+        if !created_any {
+            process.step_message("(No new PRs needed)");
         }
+
+        process.complete_step(step_create_prs);
+        process.finish();
 
         Ok(())
     }
@@ -1036,7 +1056,7 @@ pub mod commands {
     /// Display stacks in tree format with optional PR information
     fn display_stacks_with_pr_info(
         stacks: &std::collections::BTreeMap<String, Vec<u32>>,
-        pr_info: Option<&std::collections::HashMap<String, crate::github::PullRequestInfo>>
+        pr_info: Option<&std::collections::HashMap<String, crate::github::PullRequestInfo>>,
     ) {
         if stacks.is_empty() {
             println!("No stacks found in this repository.");
@@ -1057,14 +1077,15 @@ pub mod commands {
                 let prefix = if is_last_branch { "└─" } else { "├─" };
 
                 let branch_name = format!("{}/{}", feature_name, index);
-                
+
                 // Check if we have PR information for this branch
                 let display_line = if let Some(pr_map) = pr_info {
                     if let Some(pr) = pr_map.get(&branch_name) {
-                        format!("{} {} #{} ({})", 
-                            prefix, 
-                            branch_name, 
-                            pr.number, 
+                        format!(
+                            "{} {} #{} ({})",
+                            prefix,
+                            branch_name,
+                            pr.number,
                             pr.status.display()
                         )
                     } else {

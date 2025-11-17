@@ -1,5 +1,5 @@
+use git_stack::github::{MockGitHubRunner, PrStatus, PullRequestInfo};
 use git_stack::{commands, GitStackError, MockGitRunner};
-use git_stack::github::{MockGitHubRunner, PullRequestInfo, PrStatus};
 
 #[test]
 fn test_analyze_stacks_with_valid_branches() {
@@ -97,26 +97,38 @@ fn test_list_stacks_with_github_integration() {
     ]);
 
     let mock_github_runner = MockGitHubRunner::new()
-        .with_pr_info("feature-auth/1", PullRequestInfo {
-            number: 101,
-            title: "Auth system part 1".to_string(),
-            status: PrStatus::Merged,
-        })
-        .with_pr_info("feature-auth/2", PullRequestInfo {
-            number: 102,
-            title: "Auth system part 2".to_string(),
-            status: PrStatus::Open,
-        })
-        .with_pr_info("ui-redesign/1", PullRequestInfo {
-            number: 103,
-            title: "UI redesign".to_string(),
-            status: PrStatus::Draft,
-        })
-        .with_pr_info("ui-redesign/2", PullRequestInfo {
-            number: 104,
-            title: "UI redesign part 2".to_string(),
-            status: PrStatus::Closed,
-        });
+        .with_pr_info(
+            "feature-auth/1",
+            PullRequestInfo {
+                number: 101,
+                title: "Auth system part 1".to_string(),
+                status: PrStatus::Merged,
+            },
+        )
+        .with_pr_info(
+            "feature-auth/2",
+            PullRequestInfo {
+                number: 102,
+                title: "Auth system part 2".to_string(),
+                status: PrStatus::Open,
+            },
+        )
+        .with_pr_info(
+            "ui-redesign/1",
+            PullRequestInfo {
+                number: 103,
+                title: "UI redesign".to_string(),
+                status: PrStatus::Draft,
+            },
+        )
+        .with_pr_info(
+            "ui-redesign/2",
+            PullRequestInfo {
+                number: 104,
+                title: "UI redesign part 2".to_string(),
+                status: PrStatus::Closed,
+            },
+        );
 
     let result = commands::list_stacks_with_github(&mock_git_runner, Some(&mock_github_runner));
     assert!(result.is_ok());
@@ -124,10 +136,8 @@ fn test_list_stacks_with_github_integration() {
 
 #[test]
 fn test_list_stacks_github_failure_fallback() {
-    let mock_git_runner = MockGitRunner::new().with_branches(vec![
-        "main".to_string(),
-        "feature-auth/1".to_string(),
-    ]);
+    let mock_git_runner =
+        MockGitRunner::new().with_branches(vec!["main".to_string(), "feature-auth/1".to_string()]);
 
     let mock_github_runner = MockGitHubRunner::new().with_operation_failure();
 
@@ -159,19 +169,19 @@ fn test_pr_status_precedence_closed_with_changes_requested() {
     // Test that CLOSED state takes precedence over CHANGES_REQUESTED review decision
     // This verifies the fix for the precedence issue where closed PRs with changes requested
     // were incorrectly classified as ChangesRequested instead of Closed
-    
-    let mock_git_runner = MockGitRunner::new().with_branches(vec![
-        "main".to_string(),
-        "test-precedence/1".to_string(),
-    ]);
+
+    let mock_git_runner = MockGitRunner::new()
+        .with_branches(vec!["main".to_string(), "test-precedence/1".to_string()]);
 
     // Create a mock that simulates a PR that was closed but had changes requested
-    let mock_github_runner = MockGitHubRunner::new()
-        .with_pr_info("test-precedence/1", PullRequestInfo {
+    let mock_github_runner = MockGitHubRunner::new().with_pr_info(
+        "test-precedence/1",
+        PullRequestInfo {
             number: 999,
             title: "Test precedence".to_string(),
             status: PrStatus::Closed, // Should be Closed, not ChangesRequested
-        });
+        },
+    );
 
     let result = commands::list_stacks_with_github(&mock_git_runner, Some(&mock_github_runner));
     assert!(result.is_ok());
