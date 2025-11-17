@@ -25,6 +25,7 @@ pub enum PrStatus {
     Open,
     Draft,
     Merged,
+    Closed,
     ChangesRequested,
 }
 
@@ -35,6 +36,7 @@ impl PrStatus {
             PrStatus::Open => "open",
             PrStatus::Draft => "draft",
             PrStatus::Merged => "merged",
+            PrStatus::Closed => "closed",
             PrStatus::ChangesRequested => "changes requested",
         }
     }
@@ -45,6 +47,7 @@ impl PrStatus {
             PrStatus::Open => "", // Default color
             PrStatus::Draft => "\x1b[90m", // Gray
             PrStatus::Merged => "\x1b[32m", // Green
+            PrStatus::Closed => "\x1b[31m", // Red
             PrStatus::ChangesRequested => "\x1b[33m", // Yellow
         }
     }
@@ -256,6 +259,8 @@ impl GitHubRunner for RealGitHubRunner {
                             PrStatus::Merged
                         } else if review_decision == Some("CHANGES_REQUESTED") {
                             PrStatus::ChangesRequested
+                        } else if state == "CLOSED" {
+                            PrStatus::Closed
                         } else {
                             PrStatus::Open
                         };
