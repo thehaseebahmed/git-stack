@@ -307,8 +307,7 @@ pub mod git {
             git_runner.run_command(&["fetch", "origin"])?;
             Ok(())
         } else {
-            // Repository has no remote - this is not an error, just log and continue
-            println!("Warning: No remote repository configured. Skipping fetch operation.");
+            // Repository has no remote - this is not an error, just skip silently
             Ok(())
         }
     }
@@ -389,20 +388,15 @@ pub mod git {
     ) -> Result<()> {
         // Check if branch has remote tracking
         if !has_remote_tracking(git_runner, branch_name)? {
-            println!("  - Skipping {}: no remote tracking branch", branch_name);
             return Ok(());
         }
-
-        println!("  - Pulling changes for {}", branch_name);
 
         // Checkout the branch
         checkout_branch(git_runner, branch_name)?;
 
         // Pull changes
         match pull_current_branch(git_runner) {
-            Ok(()) => {
-                println!("    ✓ Successfully pulled changes");
-            }
+            Ok(()) => {}
             Err(e) => {
                 // Return to original branch before propagating error
                 let _ = checkout_branch(git_runner, original_branch);
@@ -758,15 +752,9 @@ pub mod commands {
         // Determine sync scope based on current branch context
         match (is_on_base_branch, current_context) {
             // On default branch - sync all stacks
-            (true, _) => {
-                println!("Syncing all stacks from default branch...");
-                sync_all_stacks(git_runner)
-            }
+            (true, _) => sync_all_stacks(git_runner),
             // On stack branch - sync current stack only
-            (false, Some(stack_info)) => {
-                println!("Syncing current stack: {}", stack_info.feature_name);
-                sync_current_stack(git_runner, &stack_info)
-            }
+            (false, Some(stack_info)) => sync_current_stack(git_runner, &stack_info),
             // On non-stack/non-default branch - error
             (false, None) => Err(GitStackError::InvalidBranchForSync(current_branch)),
         }
@@ -774,36 +762,65 @@ pub mod commands {
 
     /// Sync all stacks in the repository
     fn sync_all_stacks(git_runner: &dyn GitRunner) -> Result<()> {
+        use crate::process::MultiStepProcess;
+
         let original_branch = git::get_current_branch(git_runner)?;
 
-        println!("🔄 Starting sync for all stacks...");
+        // Initialize the multi-step process
+        let mut process = MultiStepProcess::new("Syncing all stacks".to_string());
+
+        // Define all steps upfront
+        let step_fetch = process.add_step("Fetching from remote".to_string());
+        let step_sync = process.add_step("Synced stacks".to_string());
+        let step_return = process.add_step(format!("Returned to {}", original_branch));
+
+        process.start();
 
         // Step 1: Fetch from remote
-        println!("\n1. Fetching from remote...");
+        process.start_step(step_fetch, true);
         git::fetch_remote(git_runner)?;
+        process.complete_step(step_fetch);
 
         // Step 2: Get all stacks
         let branches = git::list_branches(git_runner)?;
         let stacks = analyze_stacks(&branches);
 
         if stacks.is_empty() {
-            println!("ℹ️  No stacks found in repository");
+            process.step_message("No stacks found in repository");
+            process.complete_step(step_sync);
+            process.skip_step(step_return);
+            process.finish();
             return Ok(());
         }
 
-        println!("\n2. Syncing {} stack(s):", stacks.len());
+        // Update step label with count
+        process.update_step_label(step_sync, format!("Synced {} diff(s)", stacks.len()));
+        process.start_step(step_sync, false);
 
         // Step 3: Sync each stack
         for feature_name in stacks.keys() {
-            println!("\n📦 Syncing stack: {}", feature_name);
-            sync_stack_by_name(git_runner, feature_name, &original_branch)?;
+            let stack_spinner = process.start_sub_spinner(format!("Syncing {}...", feature_name));
+            match sync_stack_by_name(git_runner, feature_name, &original_branch) {
+                Ok(()) => {
+                    stack_spinner.finish_and_clear();
+                    process.step_message(&format!("✓ Synced {}", feature_name));
+                }
+                Err(e) => {
+                    stack_spinner.finish_and_clear();
+                    process.step_message(&format!("✗ Failed to sync {}: {}", feature_name, e));
+                    return Err(e);
+                }
+            }
         }
 
-        // Step 4: Return to original branch
-        println!("\n3. Returning to original branch: {}", original_branch);
-        git::checkout_branch(git_runner, &original_branch)?;
+        process.complete_step(step_sync);
 
-        println!("✅ All stacks synchronized successfully!");
+        // Step 4: Return to original branch
+        process.start_step(step_return, false);
+        git::checkout_branch(git_runner, &original_branch)?;
+        process.complete_step(step_return);
+
+        process.finish();
         Ok(())
     }
 
@@ -812,26 +829,52 @@ pub mod commands {
         git_runner: &dyn GitRunner,
         stack_info: &branch::StackInfo,
     ) -> Result<()> {
+        use crate::process::MultiStepProcess;
+
         let original_branch = git::get_current_branch(git_runner)?;
 
-        println!("🔄 Starting sync for stack: {}", stack_info.feature_name);
+        // Initialize the multi-step process
+        let mut process =
+            MultiStepProcess::new(format!("Syncing stack: {}", stack_info.feature_name));
+
+        // Define all steps upfront
+        let step_fetch = process.add_step("Fetching from remote".to_string());
+        let step_sync = process.add_step(format!("Synced 1 diff"));
+        let step_return = process.add_step(format!("Returned to {}", original_branch));
+
+        process.start();
 
         // Step 1: Fetch from remote
-        println!("\n1. Fetching from remote...");
+        process.start_step(step_fetch, true);
         git::fetch_remote(git_runner)?;
+        process.complete_step(step_fetch);
 
         // Step 2: Sync this stack only
-        println!("\n2. Syncing current stack:");
-        sync_stack_by_name(git_runner, &stack_info.feature_name, &original_branch)?;
+        process.start_step(step_sync, false);
+        let sync_spinner =
+            process.start_sub_spinner(format!("Syncing {}...", stack_info.feature_name));
+        match sync_stack_by_name(git_runner, &stack_info.feature_name, &original_branch) {
+            Ok(()) => {
+                sync_spinner.finish_and_clear();
+                process.step_message(&format!("✓ Synced {}", stack_info.feature_name));
+            }
+            Err(e) => {
+                sync_spinner.finish_and_clear();
+                process.step_message(&format!(
+                    "✗ Failed to sync {}: {}",
+                    stack_info.feature_name, e
+                ));
+                return Err(e);
+            }
+        }
+        process.complete_step(step_sync);
 
         // Step 3: Return to original branch
-        println!("\n3. Returning to original branch: {}", original_branch);
+        process.start_step(step_return, false);
         git::checkout_branch(git_runner, &original_branch)?;
+        process.complete_step(step_return);
 
-        println!(
-            "✅ Stack '{}' synchronized successfully!",
-            stack_info.feature_name
-        );
+        process.finish();
         Ok(())
     }
 
@@ -1019,35 +1062,25 @@ pub mod commands {
         let stack_branches = branch::get_stack_branches(git_runner, feature_name)?;
 
         if stack_branches.is_empty() {
-            println!("  ⚠️  No branches found for stack '{}'", feature_name);
             return Ok(());
         }
 
         // Step 1: Pull all branches with remote tracking
-        println!("  • Pulling remote changes:");
         git::pull_stack_branches(git_runner, &stack_branches, original_branch)?;
 
         // Step 2: Find first branch for rebasing
         if let Some(first_branch) = branch::find_first_branch_in_stack(git_runner, feature_name)? {
-            println!("  • Rebasing stack from: {}", first_branch);
-
             // Checkout first branch and rebase
             git::checkout_branch(git_runner, &first_branch)?;
 
             match git::rebase_with_update_refs(git_runner, &first_branch) {
-                Ok(()) => println!("    ✓ Stack rebased successfully"),
+                Ok(()) => {}
                 Err(e) => {
-                    println!("    ❌ Rebase failed: {}", e);
-                    println!(
-                        "    Please resolve conflicts manually and run 'git rebase --continue'"
-                    );
                     // Return to original branch before propagating error
                     let _ = git::checkout_branch(git_runner, original_branch);
                     return Err(e);
                 }
             }
-        } else {
-            println!("  ⚠️  No first branch found for stack '{}'", feature_name);
         }
 
         Ok(())

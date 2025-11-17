@@ -1,7 +1,18 @@
 # cli-commands Specification
 
 ## Purpose
-TBD - created by archiving change implement-new-branch-command. Update Purpose after archive.
+Defines the command-line interface requirements for git-stack, including argument parsing, validation, context-aware behavior, and user feedback.
+
+## Terminology
+This specification uses consistent terminology throughout:
+
+- **Stack**: A collection of related branches under a common feature name (e.g., `feature-auth`, `payment-flow`)
+- **Diff**: An individual branch within a stack (e.g., `feature-auth/1`, `feature-auth/2`)
+
+**Important**: When referring to stack branches in CLI output or documentation:
+- Use "diff(s)" instead of "branch(es)" to maintain consistency with stack-based workflow concepts
+- Use "stack(s)" when referring to the overall feature grouping
+- Example: "Synced 3 diffs in the feature-auth stack"
 ## Requirements
 ### Requirement: Command-line argument parsing
 The application MUST parse command-line arguments to identify and execute commands, with context-aware behavior for the new command.

@@ -4,6 +4,26 @@
 
 git-stack is a developer productivity tool that makes stacked pull requests simple, intuitive, and GitHub‑native. It streamlines the workflow of creating, managing, and merging dependent branches, so you can focus on writing code instead of wrestling with rebases and PR chains.
 
+## Terminology
+
+Understanding the terminology used in git-stack:
+
+- **Stack**: A collection of related branches organized under a common feature name (e.g., `feature-auth`, `payment-flow`). A stack represents a single logical feature broken into multiple independent changes.
+- **Diff**: An individual branch within a stack (e.g., `feature-auth/1`, `feature-auth/2`). Each diff represents one reviewable unit of change. In git-stack, branches like `feature-auth/1` and `feature-auth/2` are called "diffs".
+
+**Example:**
+```
+feature-auth         ← This is a stack
+├─ feature-auth/1    ← This is a diff (diff #1 in the feature-auth stack)
+├─ feature-auth/2    ← This is a diff (diff #2 in the feature-auth stack)
+└─ feature-auth/3    ← This is a diff (diff #3 in the feature-auth stack)
+
+payment-flow         ← This is another stack
+└─ payment-flow/1    ← This is a diff (diff #1 in the payment-flow stack)
+```
+
+Throughout this documentation and CLI output, you'll see references to "stacks" (the overall feature) and "diffs" (individual reviewable units).
+
 ## Features
 
 ### 🌳 Stack Creation & Management
@@ -51,19 +71,21 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
   - Automatically rebase all dependent branches when you change a parent
   - Context-aware: sync all stacks or just your current one
 
-  ```bash
-  # From main - sync all stacks
-  git-stack sync
-  ```
-  ```
-  🔄 Starting sync for all stacks...
-  1. Fetching from remote...
-  2. Syncing 2 stack(s):
-
-  📦 Syncing stack: feature-auth
-    ✓ Stack rebased successfully
-  ✅ All stacks synchronized successfully!
-  ```
+   ```bash
+   # From main - sync all stacks
+   git-stack sync
+   ```
+   ```
+   ┌  Syncing all stacks
+   │
+   ◆  Fetching from remote
+   ◆  Synced 2 diff(s)
+   │  ✓ Synced feature-auth
+   │  ✓ Synced payment-flow
+   ◆  Returned to main
+   │
+   └  All done!
+   ```
 
 - **Remote Integration**
   - Pull latest changes from remote for all stack branches
