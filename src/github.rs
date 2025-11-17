@@ -257,10 +257,10 @@ impl GitHubRunner for RealGitHubRunner {
                             PrStatus::Draft
                         } else if state == "MERGED" || merged_at.is_some() {
                             PrStatus::Merged
-                        } else if review_decision == Some("CHANGES_REQUESTED") {
-                            PrStatus::ChangesRequested
                         } else if state == "CLOSED" {
                             PrStatus::Closed
+                        } else if review_decision == Some("CHANGES_REQUESTED") {
+                            PrStatus::ChangesRequested
                         } else {
                             PrStatus::Open
                         };
