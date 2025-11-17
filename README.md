@@ -51,19 +51,21 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
   - Automatically rebase all dependent branches when you change a parent
   - Context-aware: sync all stacks or just your current one
 
-  ```bash
-  # From main - sync all stacks
-  git-stack sync
-  ```
-  ```
-  🔄 Starting sync for all stacks...
-  1. Fetching from remote...
-  2. Syncing 2 stack(s):
-
-  📦 Syncing stack: feature-auth
-    ✓ Stack rebased successfully
-  ✅ All stacks synchronized successfully!
-  ```
+   ```bash
+   # From main - sync all stacks
+   git-stack sync
+   ```
+   ```
+   ┌  Syncing all stacks
+   │
+   ◆  Fetching from remote
+   ◆  Synced 2 diff(s)
+   │  ✓ Synced feature-auth
+   │  ✓ Synced payment-flow
+   ◆  Returned to main
+   │
+   └  All done!
+   ```
 
 - **Remote Integration**
   - Pull latest changes from remote for all stack branches
