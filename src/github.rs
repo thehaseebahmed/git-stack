@@ -15,7 +15,7 @@ pub struct PullRequestInfo {
     pub number: u32,
     /// PR title
     pub title: String,
-    /// PR status (open, draft, merged, changes_requested)
+    /// PR status (open, draft, merged, closed, changes_requested)
     pub status: PrStatus,
 }
 
