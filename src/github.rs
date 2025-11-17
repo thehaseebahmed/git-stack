@@ -212,7 +212,7 @@ impl GitHubRunner for RealGitHubRunner {
     fn get_pull_request_info(&self, branch: &str) -> Result<Option<PullRequestInfo>> {
         let output = Command::new("gh")
             .args([
-                "pr", "list", "--head", branch, "--json", 
+                "pr", "list", "--head", branch, "--state", "all", "--json", 
                 "number,title,state,isDraft,reviewDecision,mergedAt", 
                 "--limit", "1",
             ])
