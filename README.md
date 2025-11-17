@@ -77,23 +77,23 @@ git-stack is a developer productivity tool that makes stacked pull requests simp
   - Automatic PR titles and descriptions with stack context
   - Smart detection of existing PRs to avoid duplicates
   - Set up proper PR relationships so reviewers understand dependencies
+  - Modern CLI output with animated progress indicators and clear visual hierarchy
 
   ```bash
   # From any stack branch
   git-stack review
   ```
   ```
-  🔄 Creating pull requests for stack: feature-auth
-  📦 Found 3 branch(es) in stack:
-    - feature-auth/1
-    - feature-auth/2
-    - feature-auth/3
-  🚀 Creating missing pull requests...
-    ✓ Created PR #101 for feature-auth/1
-    ✓ Created PR #102 for feature-auth/2 (Depends on #101)
-  ✅ Review summary:
-    feature-auth/1 -> PR #101
-    feature-auth/2 -> PR #102
+  ┌  Creating PRs for stack: feature-auth
+  │
+  ◇  Found 3 diff(s) in stack
+  │
+  ◆  Created missing pull requests
+  │  ✓ Created PR #101 for feature-auth/1
+  │  ✓ Created PR #102 for feature-auth/2
+  │  ✓ Created PR #103 for feature-auth/3
+  │
+  └  All done!
   ```
 
 - **GitHub CLI Integration**

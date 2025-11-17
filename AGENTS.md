@@ -36,3 +36,13 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 - **Error handling**: Use `Result<T, E>` with `?` operator, avoid unwrap()
 - **Documentation**: Document public APIs with `///` comments
 - **Testing**: Write unit tests with `#[test]`, integration tests in `tests/`
+
+## Documentation Requirements
+- **Always update README.md** when implementing user-facing changes:
+  - Update command examples if CLI output format changes
+  - Add/update feature descriptions for new functionality
+  - Update installation/setup instructions if dependencies change
+  - Ensure code examples match actual behavior
+- **Include documentation tasks** in `tasks.md` for every change proposal
+- **Review documentation** before marking implementation complete
+- **Common files to check**: README.md, inline help text, code comments

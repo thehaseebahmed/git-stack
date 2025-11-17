@@ -52,9 +52,10 @@ Track these steps as TODOs and complete them one by one.
 2. **Read design.md** (if exists) - Review technical decisions
 3. **Read tasks.md** - Get implementation checklist
 4. **Implement tasks sequentially** - Complete in order
-5. **Confirm completion** - Ensure every item in `tasks.md` is finished before updating statuses
-6. **Update checklist** - After all work is done, set every task to `- [x]` so the list reflects reality
-7. **Approval gate** - Do not start implementation until the proposal is reviewed and approved
+5. **Update documentation** - Ensure README.md and other docs reflect any user-facing changes
+6. **Confirm completion** - Ensure every item in `tasks.md` is finished before updating statuses
+7. **Update checklist** - After all work is done, set every task to `- [x]` so the list reflects reality
+8. **Approval gate** - Do not start implementation until the proposal is reviewed and approved
 
 ### Stage 3: Archiving Changes
 After deployment, create separate PR to:
@@ -202,6 +203,11 @@ If multiple capabilities are affected, create multiple delta files under `change
 - [ ] 1.2 Implement API endpoint
 - [ ] 1.3 Add frontend component
 - [ ] 1.4 Write tests
+
+## 2. Update Documentation
+- [ ] 2.1 Update README.md with new features/changes
+- [ ] 2.2 Update any affected documentation files
+- [ ] 2.3 Update code examples if behavior changed
 ```
 
 5. **Create design.md when needed:**

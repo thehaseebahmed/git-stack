@@ -32,3 +32,7 @@
 ## 5. Update Tests
 - [x] 5.1 Update integration tests to match new output format
 - [x] 5.2 Ensure existing functionality tests still pass
+
+## 6. Update Documentation
+- [x] 6.1 Update README.md example output to reflect new format
+- [x] 6.2 Update any other documentation that shows review command output
