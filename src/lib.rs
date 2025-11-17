@@ -25,6 +25,7 @@
 
 use std::fmt;
 use std::process::Command;
+use indicatif::{ProgressBar, ProgressStyle};
 
 pub mod github;
 
@@ -860,7 +861,7 @@ pub mod commands {
             }
             (false, Some(stack_info)) => {
                 println!(
-                    "🔄 Creating pull requests for stack: {}",
+                    "┌  Creating PRs for stack: {}",
                     stack_info.feature_name
                 );
                 create_stack_prs(git_runner, github_runner, &stack_info.feature_name)?;
@@ -880,14 +881,16 @@ pub mod commands {
         let stack_branches = branch::get_stack_branches(git_runner, feature_name)?;
 
         if stack_branches.is_empty() {
-            println!("ℹ️  No branches found for stack '{}'", feature_name);
+            println!("│");
+            println!("◇  No diffs found for stack '{}'", feature_name);
+            println!("│");
+            println!("└  All done!");
             return Ok(());
         }
 
-        println!("📦 Found {} branch(es) in stack:", stack_branches.len());
-        for branch in &stack_branches {
-            println!("  - {}", branch);
-        }
+        println!("│");
+        println!("◇  Found {} diff(s) in stack", stack_branches.len());
+        println!("│");
 
         // Get default branch for PR base
         let default_branch = git::get_default_branch(git_runner)?;
@@ -896,49 +899,64 @@ pub mod commands {
         let mut pr_numbers: std::collections::HashMap<String, u32> =
             std::collections::HashMap::new();
 
-        println!("\n🔍 Checking for existing pull requests...");
+        // Create spinner for checking PRs
+        let spinner = ProgressBar::new_spinner();
+        spinner.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.cyan} {msg}")
+                .unwrap()
+                .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+        );
+        spinner.set_message("Checking for existing pull requests...");
+        spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+
         for branch in &stack_branches {
             if let Some(pr_num) = github_runner.list_pull_requests_for_branch(branch)? {
-                println!("  ✓ {} already has PR #{}", branch, pr_num);
                 pr_numbers.insert(branch.clone(), pr_num);
-            } else {
-                println!("  - {} needs PR creation", branch);
             }
         }
 
+        spinner.finish_and_clear();
+
         // Check if all PRs already exist
         if pr_numbers.len() == stack_branches.len() {
-            println!("\n✅ All PRs already exist for this stack:");
-            for branch in &stack_branches {
-                if let Some(pr_num) = pr_numbers.get(branch) {
-                    println!("  {} -> PR #{}", branch, pr_num);
-                }
-            }
+            println!("◇  All PRs already exist");
+            println!("│");
+            println!("└  All done!");
             return Ok(());
         }
 
         // Create PRs for branches that don't have them
-        println!("\n🚀 Creating missing pull requests...");
+        println!("◆  Created missing pull requests");
         let mut dependency_pr: Option<u32> = None;
         let mut previous_branch: Option<String> = None;
+        let mut created_any = false;
 
         for branch in &stack_branches {
             // If this branch already has a PR, skip creation but update tracking
             if let Some(existing_pr) = pr_numbers.get(branch) {
-                println!("  ✓ {} already has PR #{} (skipping)", branch, existing_pr);
                 dependency_pr = Some(*existing_pr);
                 previous_branch = Some(branch.clone());
                 continue;
             }
 
+            // Create spinner for PR creation
+            let pr_spinner = ProgressBar::new_spinner();
+            pr_spinner.set_style(
+                ProgressStyle::default_spinner()
+                    .template("│  {spinner:.cyan} {msg}")
+                    .unwrap()
+                    .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+            );
+            pr_spinner.set_message(format!("Creating PR for {}...", branch));
+            pr_spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+
             // Push the branch to remote first
-            println!("  • Pushing branch {} to remote...", branch);
             match git::push_branch(git_runner, branch) {
-                Ok(()) => {
-                    println!("    ✓ Branch pushed to remote");
-                }
+                Ok(()) => {}
                 Err(e) => {
-                    println!("    ❌ Failed to push branch: {}", e);
+                    pr_spinner.finish_and_clear();
+                    println!("│  ✗ Failed to push branch {}: {}", branch, e);
                     return Err(e);
                 }
             }
@@ -961,30 +979,30 @@ pub mod commands {
                     &default_branch
                 };
 
-                println!("  • Creating PR for {}: '{}'", branch, title);
-
                 match github_runner.create_pull_request(branch, &title, &body, base_branch) {
                     Ok(pr_num) => {
-                        println!("    ✓ Created PR #{}", pr_num);
+                        pr_spinner.finish_and_clear();
+                        println!("│  ✓ Created PR #{} for {}", pr_num, branch);
                         dependency_pr = Some(pr_num);
                         previous_branch = Some(branch.clone());
                         pr_numbers.insert(branch.clone(), pr_num);
+                        created_any = true;
                     }
                     Err(e) => {
-                        println!("    ❌ Failed to create PR: {}", e);
+                        pr_spinner.finish_and_clear();
+                        println!("│  ✗ Failed to create PR for {}: {}", branch, e);
                         return Err(e);
                     }
                 }
             }
         }
 
-        // Print summary
-        println!("\n✅ Review summary:");
-        for branch in &stack_branches {
-            if let Some(pr_num) = pr_numbers.get(branch) {
-                println!("  {} -> PR #{}", branch, pr_num);
-            }
+        if !created_any {
+            println!("│  (No new PRs needed)");
         }
+
+        println!("│");
+        println!("└  All done!");
 
         Ok(())
     }
