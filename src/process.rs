@@ -97,9 +97,9 @@ impl MultiStepProcess {
             spinner.set_message(step.label.clone());
             spinner.enable_steady_tick(std::time::Duration::from_millis(100));
             step.spinner = Some(spinner);
-        } else {
-            println!("◇  {}", step.label);
         }
+        // Note: For steps without spinners, we don't print here.
+        // The final status will be printed when complete_step/skip_step is called.
     }
 
     /// Update the current step's state without finishing it
@@ -143,8 +143,8 @@ impl MultiStepProcess {
             return;
         }
 
-        self.finish_step_internal(step_index);
         self.steps[step_index].state = StepState::Completed;
+        self.finish_step_internal(step_index);
 
         if self.current_step == Some(step_index) {
             self.current_step = None;
@@ -157,8 +157,8 @@ impl MultiStepProcess {
             return;
         }
 
-        self.finish_step_internal(step_index);
         self.steps[step_index].state = StepState::Skipped;
+        self.finish_step_internal(step_index);
 
         if self.current_step == Some(step_index) {
             self.current_step = None;
@@ -194,13 +194,13 @@ impl MultiStepProcess {
         // Clear any active spinner
         if let Some(spinner) = step.spinner.take() {
             spinner.finish_and_clear();
+        }
 
-            // Print the step with its final state
-            match step.state {
-                StepState::Completed => println!("◆  {}", step.label),
-                StepState::Skipped => println!("◇  {} (skipped)", step.label),
-                _ => println!("◇  {}", step.label),
-            }
+        // Print the step with its final state
+        match step.state {
+            StepState::Completed => println!("◆  {}", step.label),
+            StepState::Skipped => println!("◇  {} (skipped)", step.label),
+            StepState::Pending | StepState::InProgress => println!("◇  {}", step.label),
         }
     }
 }
